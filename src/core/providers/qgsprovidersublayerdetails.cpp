@@ -21,5 +21,26 @@
 
 QgsMapLayer *QgsProviderSublayerDetails::toLayer( const LayerOptions &options ) const
 {
-  return QgsMapLayerFactory::createLayer( mUri, mName, mType, mProviderKey, options.transformContext );
+  QgsMapLayerFactory::LayerOptions layerOptions( options.transformContext );
+  layerOptions.loadDefaultStyle = options.loadDefaultStyle;
+  return QgsMapLayerFactory::createLayer( mUri, mName, mType, layerOptions, mProviderKey );
+}
+
+bool QgsProviderSublayerDetails::operator==( const QgsProviderSublayerDetails &other ) const
+{
+  return mProviderKey == other.mProviderKey
+         && mType == other.mType
+         && mUri == other.mUri
+         && mLayerNumber == other.mLayerNumber
+         && mName == other.mName
+         && mDescription == other.mDescription
+         && mFeatureCount == other.mFeatureCount
+         && mGeometryColumnName == other.mGeometryColumnName
+         && mPath == other.mPath
+         && mWkbType == other.mWkbType;
+}
+
+bool QgsProviderSublayerDetails::operator!=( const QgsProviderSublayerDetails &other ) const
+{
+  return !( *this == other );
 }

@@ -34,6 +34,7 @@ email                : nyall dot dawson at gmail dot com
 
 class QgsOgrLayer;
 class QgsCoordinateReferenceSystem;
+class QgsProviderSublayerDetails;
 
 ///@cond PRIVATE
 #define SIP_NO_FILE
@@ -240,6 +241,9 @@ class CORE_EXPORT QgsOgrProviderUtils
 
     static QString ogrWkbGeometryTypeName( OGRwkbGeometryType type );
 
+    //! Resolves the geometry type for a feature, with special handling for some drivers
+    static OGRwkbGeometryType resolveGeometryTypeForFeature( OGRFeatureH feature, const QString &driverName );
+
     static QString analyzeURI( QString const &uri,
                                bool &isSubLayer,
                                int &layerIndex,
@@ -255,6 +259,10 @@ class CORE_EXPORT QgsOgrProviderUtils
     static bool canDriverShareSameDatasetAmongLayers( const QString &driverName,
         bool updateMode,
         const QString &dsName );
+
+    static QList<QgsProviderSublayerDetails> querySubLayerList( int i, QgsOgrLayer *layer, const QString &driverName, Qgis::SublayerQueryFlags flags, bool isSubLayer,
+        const QString &baseUri, bool hasSingleLayerOnly, QgsFeedback *feedback = nullptr );
+
 };
 
 
@@ -265,6 +273,7 @@ class CORE_EXPORT QgsOgrProviderUtils
 class QgsOgrDataset
 {
     friend class QgsOgrProviderUtils;
+    friend class QgsOgrTransaction;
     QgsOgrProviderUtils::DatasetIdentification mIdent;
     QgsOgrProviderUtils::DatasetWithLayers *mDs;
 

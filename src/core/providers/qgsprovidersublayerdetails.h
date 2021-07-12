@@ -100,7 +100,11 @@ class CORE_EXPORT QgsProviderSublayerDetails
         : transformContext( transformContext )
       {}
 
+      //! Coordinate transform context
       QgsCoordinateTransformContext transformContext;
+
+      //! Set to TRUE if the default layer style should be loaded
+      bool loadDefaultStyle = true;
     };
 
     /**
@@ -229,6 +233,10 @@ class CORE_EXPORT QgsProviderSublayerDetails
      * \see layerNumber()
      */
     void setLayerNumber( int number ) { mLayerNumber = number; }
+
+    // TODO c++20 - replace with = default
+    bool operator==( const QgsProviderSublayerDetails &other ) const;
+    bool operator!=( const QgsProviderSublayerDetails &other ) const;
 
   private:
 

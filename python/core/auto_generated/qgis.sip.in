@@ -226,6 +226,29 @@ The development version
       UserCanceled,
     };
 
+    enum class SqlLayerDefinitionCapability
+    {
+      SubsetStringFilter,
+      GeometryColumn,
+      PrimaryKeys,
+      UnstableFeatureIds
+    };
+    typedef QFlags<Qgis::SqlLayerDefinitionCapability> SqlLayerDefinitionCapabilities;
+
+
+    enum class SqlKeywordCategory
+    {
+      Keyword,
+      Constant,
+      Function,
+      Geospatial,
+      Operator,
+      Math,
+      Aggregate,
+      String,
+      Identifier
+    };
+
     enum class DriveType
     {
       Unknown,
@@ -270,6 +293,29 @@ The development version
       ResampleFilter,
       //! Resampling occurs in Provider
       Provider
+    };
+
+    enum class MeshEditingErrorType
+    {
+      NoError,
+      InvalidFace,
+      FlatFace,
+      UniqueSharedVertex,
+      InvalidVertex,
+    };
+
+    enum class FilePathType
+    {
+      Absolute,
+      Relative,
+    };
+
+    enum class SublayerPromptMode
+    {
+      AlwaysAsk,
+      AskExcludingRasterBands,
+      NeverAskSkip,
+      NeverAskLoadAll,
     };
 
     static const double DEFAULT_SEARCH_RADIUS_MM;
@@ -346,6 +392,8 @@ QFlags<Qgis::SymbolPreviewFlag> operator|(Qgis::SymbolPreviewFlag f1, QFlags<Qgi
 QFlags<Qgis::BrowserItemCapability> operator|(Qgis::BrowserItemCapability f1, QFlags<Qgis::BrowserItemCapability> f2);
 
 QFlags<Qgis::SublayerQueryFlag> operator|(Qgis::SublayerQueryFlag f1, QFlags<Qgis::SublayerQueryFlag> f2);
+
+QFlags<Qgis::SqlLayerDefinitionCapability> operator|(Qgis::SqlLayerDefinitionCapability f1, QFlags<Qgis::SqlLayerDefinitionCapability> f2);
 
 
 

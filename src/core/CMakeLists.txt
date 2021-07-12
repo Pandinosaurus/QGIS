@@ -1,6 +1,16 @@
 ############################################################
 # sources
 
+BISON_TARGET(QgsExpressionParser   qgsexpressionparser.yy   ${CMAKE_CURRENT_BINARY_DIR}/qgsexpressionparser.cpp COMPILE_FLAGS "-p exp_")
+FLEX_TARGET(QgsExpressionLexer qgsexpressionlexer.ll ${CMAKE_CURRENT_BINARY_DIR}/qgsexpressionlexer.cpp)
+ADD_FLEX_BISON_DEPENDENCY(QgsExpressionLexer QgsExpressionParser)
+BISON_TARGET(QgsSqlStatementParser qgssqlstatementparser.yy ${CMAKE_CURRENT_BINARY_DIR}/qgssqlstatementparser.cpp  COMPILE_FLAGS "-p sqlstatement_")
+FLEX_TARGET(QgsSqlStatementLexer qgssqlstatementlexer.ll ${CMAKE_CURRENT_BINARY_DIR}/qgssqlstatementlexer.cpp)
+ADD_FLEX_BISON_DEPENDENCY(QgsSqlStatementLexer QgsSqlStatementParser)
+BISON_TARGET(QgsMeshCalcParser mesh/qgsmeshcalcparser.yy ${CMAKE_CURRENT_BINARY_DIR}/qgsmeshcalcparser.cpp COMPILE_FLAGS "-p mesh_")
+FLEX_TARGET(QgsMeshCalcLexer mesh/qgsmeshcalclexer.ll ${CMAKE_CURRENT_BINARY_DIR}/qgsmeshcalclexer.cpp)
+ADD_FLEX_BISON_DEPENDENCY(QgsMeshCalcLexer QgsMeshCalcParser)
+
 set(QGIS_CORE_SRCS
   ${CMAKE_SOURCE_DIR}/external/kdbush/include/kdbush.hpp
 
@@ -13,6 +23,13 @@ set(QGIS_CORE_SRCS
   ${CMAKE_SOURCE_DIR}/external/nmea/tok.c
 
   ${CMAKE_SOURCE_DIR}/external/meshOptimizer/simplifier.cpp
+
+  ${FLEX_QgsExpressionLexer_OUTPUTS}
+  ${BISON_QgsExpressionParser_OUTPUTS}
+  ${FLEX_QgsSqlStatementLexer_OUTPUTS}
+  ${BISON_QgsSqlStatementParser_OUTPUTS}
+  ${FLEX_QgsMeshCalcLexer_OUTPUTS}
+  ${BISON_QgsMeshCalcParser_OUTPUTS}
 
   callouts/qgscallout.cpp
   callouts/qgscalloutsregistry.cpp
@@ -216,6 +233,9 @@ set(QGIS_CORE_SRCS
   providers/qgsprovidermetadata.cpp
   providers/qgsproviderregistry.cpp
   providers/qgsprovidersublayerdetails.cpp
+  providers/qgsprovidersublayermodel.cpp
+  providers/qgsprovidersublayertask.cpp
+  providers/qgsproviderutils.cpp
 
   providers/arcgis/qgsarcgisportalutils.cpp
   providers/arcgis/qgsarcgisrestquery.cpp
@@ -294,6 +314,7 @@ set(QGIS_CORE_SRCS
   qgscolorramp.cpp
   qgscolorscheme.cpp
   qgscolorschemeregistry.cpp
+  qgscommandlineutils.cpp
   qgsconditionalstyle.cpp
   qgsconnectionregistry.cpp
   qgscoordinateformatter.cpp
@@ -595,6 +616,7 @@ set(QGIS_CORE_SRCS
   raster/qgscolorrampshader.cpp
   raster/qgscontrastenhancement.cpp
   raster/qgscontrastenhancementfunction.cpp
+  raster/qgsexiftools.cpp
   raster/qgslinearminmaxenhancement.cpp
   raster/qgslinearminmaxenhancementwithclip.cpp
   raster/qgsraster.cpp
@@ -637,6 +659,7 @@ set(QGIS_CORE_SRCS
   raster/qgshillshaderenderer.cpp
 
   mesh/qgsmesh3daveraging.cpp
+  mesh/qgsmesheditor.cpp
   mesh/qgsmeshdataprovider.cpp
   mesh/qgsmeshdataprovidertemporalcapabilities.cpp
   mesh/qgsmeshdataset.cpp
@@ -657,6 +680,7 @@ set(QGIS_CORE_SRCS
   mesh/qgsmeshcalculator.cpp
   mesh/qgsmeshcalcutils.cpp
   mesh/qgsmeshvirtualdatasetgroup.cpp
+  mesh/qgstopologicalmesh.cpp
 
   pointcloud/qgspointcloudattribute.cpp
   pointcloud/qgspointcloudattributebyramprenderer.cpp
@@ -793,6 +817,7 @@ set(QGIS_CORE_SRCS
 
   qgsuserprofile.cpp
   qgsuserprofilemanager.cpp
+
 )
 
 if (WITH_INTERNAL_POLY2TRI)
@@ -842,18 +867,14 @@ if (${QT_VERSION_BASE}Positioning_FOUND)
   )
 endif()
 
-ADD_FLEX_FILES_PREFIX(QGIS_CORE_SRCS exp_ qgsexpressionlexer.ll)
-ADD_FLEX_FILES_PREFIX(QGIS_CORE_SRCS sqlstatement_ qgssqlstatementlexer.ll)
-ADD_FLEX_FILES_PREFIX(QGIS_CORE_SRCS mesh mesh/qgsmeshcalclexer.ll)
-ADD_BISON_FILES_PREFIX(QGIS_CORE_SRCS exp_ qgsexpressionparser.yy)
-ADD_BISON_FILES_PREFIX(QGIS_CORE_SRCS sqlstatement_ qgssqlstatementparser.yy)
-ADD_BISON_FILES_PREFIX(QGIS_CORE_SRCS mesh mesh/qgsmeshcalcparser.yy)
-
 if(NOT MSVC)
   set_source_files_properties(
-    qgsexpressionparser.cpp
-    qgssqlstatementparser.cpp
-    qgsmeshcalcparser.cpp
+    ${FLEX_QgsExpressionLexer_OUTPUTS}
+    ${BISON_QgsExpressionParser_OUTPUTS}
+    ${FLEX_QgsSqlStatementLexer_OUTPUTS}
+    ${BISON_QgsSqlStatementParser_OUTPUTS}
+    ${FLEX_QgsMeshCalcLexer_OUTPUTS}
+    ${BISON_QgsMeshCalcParser_OUTPUTS}
     PROPERTIES COMPILE_FLAGS -w)
 else()
   # -wd4702 unreachable code
@@ -861,8 +882,16 @@ else()
     geometry/qgsgeos.cpp
     pal/feature.cpp
     pal/pointset.cpp
-    ${CMAKE_BINARY_DIR}/src/core/qgsmeshcalcparser.cpp
+    ${BISON_QgsMeshCalcParser_OUTPUTS}
     PROPERTIES COMPILE_FLAGS -wd4702)
+  set_source_files_properties(
+    ${FLEX_QgsExpressionLexer_OUTPUTS}
+    ${BISON_QgsExpressionParser_OUTPUTS}
+    ${FLEX_QgsSqlStatementLexer_OUTPUTS}
+    ${BISON_QgsSqlStatementParser_OUTPUTS}
+    ${FLEX_QgsMeshCalcLexer_OUTPUTS}
+    ${BISON_QgsMeshCalcParser_OUTPUTS}
+    PROPERTIES COMPILE_FLAGS /W0)
 endif()
 
 set(QGIS_CORE_HDRS
@@ -896,6 +925,7 @@ set(QGIS_CORE_HDRS
   qgscacheindexfeatureid.h
   qgscadutils.h
   qgsclipper.h
+  qgscommandlineutils.h
   qgscolorramp.h
   qgscolorscheme.h
   qgscolorschemeregistry.h
@@ -1082,6 +1112,7 @@ set(QGIS_CORE_HDRS
   qgstransactiongroup.h
   qgstranslationcontext.h
   qgsunittypes.h
+  qgsuserprofile.h
   qgsuserprofilemanager.h
   qgsvector.h
   qgsvector3d.h
@@ -1353,6 +1384,7 @@ set(QGIS_CORE_HDRS
   maprenderer/qgsmaprenderertask.h
 
   mesh/qgsmesh3daveraging.h
+  mesh/qgsmesheditor.h
   mesh/qgsmeshdataprovider.h
   mesh/qgsmeshdataprovidertemporalcapabilities.h
   mesh/qgsmeshdataset.h
@@ -1373,6 +1405,23 @@ set(QGIS_CORE_HDRS
   mesh/qgsmeshcalculator.h
   mesh/qgsmeshcalcutils.h
   mesh/qgsmeshvirtualdatasetgroup.h
+  mesh/qgstopologicalmesh.h
+
+  pal/costcalculator.h
+  pal/feature.h
+  pal/geomfunction.h
+  pal/internalexception.h
+  pal/labelposition.h
+  pal/layer.h
+  pal/palexception.h
+  pal/pal.h
+  pal/palrtree.h
+  pal/palstat.h
+  pal/pointset.h
+  pal/priorityqueue.h
+  pal/problem.h
+  pal/util.h
+  ${PROJECT_SOURCE_DIR}/external/rtree/include/RTree.h
 
   pointcloud/qgspointcloudattribute.h
   pointcloud/qgspointcloudattributebyramprenderer.h
@@ -1479,6 +1528,9 @@ set(QGIS_CORE_HDRS
   providers/qgsprovidermetadata.h
   providers/qgsproviderregistry.h
   providers/qgsprovidersublayerdetails.h
+  providers/qgsprovidersublayermodel.h
+  providers/qgsprovidersublayertask.h
+  providers/qgsproviderutils.h
 
   providers/arcgis/qgsarcgisportalutils.h
   providers/arcgis/qgsarcgisrestquery.h
@@ -1512,6 +1564,7 @@ set(QGIS_CORE_HDRS
   raster/qgscontrastenhancement.h
   raster/qgscontrastenhancementfunction.h
   raster/qgscubicrasterresampler.h
+  raster/qgsexiftools.h
   raster/qgshillshaderenderer.h
   raster/qgshuesaturationfilter.h
   raster/qgslinearminmaxenhancement.h
@@ -1804,10 +1857,21 @@ set(IMAGE_RCCS ../../images/images.qrc)
 
 #############################################################
 # qgis_core library
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
 add_library(qgis_core ${LIBRARY_TYPE} ${QGIS_CORE_SRCS} ${QGIS_CORE_HDRS} ${QGIS_CORE_PRIVATE_HDRS} ${IMAGE_RCCS})
+
 
 # require c++17
 target_compile_features(qgis_core PRIVATE cxx_std_17)
+
+# Exiv still uses std::auto_ptr
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_definitions(qgis_core PUBLIC _LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR)
+endif()
+if (MSVC)
+  target_compile_definitions(qgis_core PUBLIC _HAS_AUTO_PTR_ETC=1)
+endif()
 
 target_include_directories(qgis_core SYSTEM PUBLIC
   ${${QT_VERSION_BASE}Core_INCLUDE_DIRS}
@@ -1831,6 +1895,7 @@ target_include_directories(qgis_core SYSTEM PUBLIC
   ${${QT_VERSION_BASE}SerialPort_INCLUDE_DIRS}
   ${Protobuf_INCLUDE_DIRS}
   ${ZLIB_INCLUDE_DIRS}
+  ${EXIV2_INCLUDE_DIR}
 )
 
 if (WITH_SPATIALITE)
@@ -2000,6 +2065,7 @@ target_link_libraries(qgis_core
   ${LIBZIP_LIBRARY}
   ${Protobuf_LITE_LIBRARY}
   ${ZLIB_LIBRARIES}
+  ${EXIV2_LIBRARY}
 )
 
 if (WITH_SPATIALITE)
@@ -2032,6 +2098,19 @@ if (FORCE_STATIC_LIBS)
     provider_wms_a
     provider_postgres_a
   )
+
+  if (WITH_AUTH)
+    target_link_libraries(qgis_core
+      authmethod_basic_a
+      authmethod_esritoken_a
+      authmethod_identcert_a
+      authmethod_pkipaths_a
+      authmethod_pkcs12_a
+    )
+    if(WITH_OAUTH2_PLUGIN)
+      target_link_libraries(qgis_core authmethod_oauth2_a)
+    endif()
+  endif()
 endif()
 
 if (MSVC)

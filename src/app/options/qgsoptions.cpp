@@ -451,11 +451,11 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WindowFlags fl, const QList<QgsOpti
   spinBoxAttrTableRowCache->setSpecialValueText( tr( "All" ) );
 
   cmbPromptSublayers->clear();
-  cmbPromptSublayers->addItem( tr( "Always" ), QgsSublayersDialog::PromptAlways );
-  cmbPromptSublayers->addItem( tr( "If Needed" ), QgsSublayersDialog::PromptIfNeeded ); //this means, prompt if there are sublayers but no band in the main dataset
-  cmbPromptSublayers->addItem( tr( "Never" ), QgsSublayersDialog::PromptNever );
-  cmbPromptSublayers->addItem( tr( "Load All" ), QgsSublayersDialog::PromptLoadAll ); // check if this is true
-  cmbPromptSublayers->setCurrentIndex( cmbPromptSublayers->findData( mSettings->enumValue( QStringLiteral( "/qgis/promptForSublayers" ), QgsSublayersDialog::PromptAlways ) ) );
+  cmbPromptSublayers->addItem( tr( "Always" ), static_cast< int >( Qgis::SublayerPromptMode::AlwaysAsk ) );
+  cmbPromptSublayers->addItem( tr( "If Needed" ), static_cast< int >( Qgis::SublayerPromptMode::AskExcludingRasterBands ) ); //this means, prompt if there are sublayers but no band in the main dataset
+  cmbPromptSublayers->addItem( tr( "Never" ), static_cast< int >( Qgis::SublayerPromptMode::NeverAskSkip ) );
+  cmbPromptSublayers->addItem( tr( "Load All" ), static_cast< int >( Qgis::SublayerPromptMode::NeverAskLoadAll ) );
+  cmbPromptSublayers->setCurrentIndex( cmbPromptSublayers->findData( static_cast< int >( mSettings->enumValue( QStringLiteral( "/qgis/promptForSublayers" ), Qgis::SublayerPromptMode::AlwaysAsk ) ) ) );
 
   // Scan for valid items in the browser dock
   cmbScanItemsInBrowser->clear();
@@ -826,7 +826,14 @@ QgsOptions::QgsOptions( QWidget *parent, Qt::WindowFlags fl, const QList<QgsOpti
   Qgis::PythonMacroMode pyMacroMode = mSettings->enumValue( QStringLiteral( "/qgis/enableMacros" ), Qgis::PythonMacroMode::Ask );
   mEnableMacrosComboBox->setCurrentIndex( mEnableMacrosComboBox->findData( QVariant::fromValue( pyMacroMode ) ) );
 
-  mDefaultPathsComboBox->setCurrentIndex( mSettings->value( QStringLiteral( "/qgis/defaultProjectPathsRelative" ), QVariant( true ) ).toBool() ? 0 : 1 );
+  mDefaultPathsComboBox->addItem( tr( "Absolute" ), static_cast< int >( Qgis::FilePathType::Absolute ) );
+  mDefaultPathsComboBox->addItem( tr( "Relative" ), static_cast< int >( Qgis::FilePathType::Relative ) );
+  mDefaultPathsComboBox->setCurrentIndex(
+    mDefaultPathsComboBox->findData(
+      static_cast< int >(
+        mSettings->value( QStringLiteral( "/qgis/defaultProjectPathsRelative" ), QVariant( true ) ).toBool() ? Qgis::FilePathType::Relative : Qgis::FilePathType::Absolute )
+    )
+  );
 
   QgsProject::FileFormat defaultProjectFileFormat = mSettings->enumValue( QStringLiteral( "/qgis/defaultProjectFileFormat" ), QgsProject::FileFormat::Qgz );
   mFileFormatQgzButton->setChecked( defaultProjectFileFormat == QgsProject::FileFormat::Qgz );
@@ -1582,7 +1589,7 @@ void QgsOptions::saveOptions()
   mSettings->setEnumValue( QStringLiteral( "/qgis/attributeTableBehavior" ), ( QgsAttributeTableFilterModel::FilterMode )cmbAttrTableBehavior->currentData().toInt() );
   mSettings->setValue( QStringLiteral( "/qgis/attributeTableView" ), mAttrTableViewComboBox->currentData() );
   mSettings->setValue( QStringLiteral( "/qgis/attributeTableRowCache" ), spinBoxAttrTableRowCache->value() );
-  mSettings->setEnumValue( QStringLiteral( "/qgis/promptForSublayers" ), ( QgsSublayersDialog::PromptMode )cmbPromptSublayers->currentData().toInt() );
+  mSettings->setEnumValue( QStringLiteral( "/qgis/promptForSublayers" ), static_cast< Qgis::SublayerPromptMode >( cmbPromptSublayers->currentData().toInt() ) );
 
   mSettings->setValue( QStringLiteral( "/qgis/scanItemsInBrowser2" ),
                        cmbScanItemsInBrowser->currentData().toString() );
@@ -1655,7 +1662,8 @@ void QgsOptions::saveOptions()
   }
   mSettings->setEnumValue( QStringLiteral( "/qgis/enableMacros" ), mEnableMacrosComboBox->currentData().value<Qgis::PythonMacroMode>() );
 
-  mSettings->setValue( QStringLiteral( "/qgis/defaultProjectPathsRelative" ), mDefaultPathsComboBox->currentIndex() == 0 );
+  mSettings->setValue( QStringLiteral( "/qgis/defaultProjectPathsRelative" ),
+                       static_cast< Qgis::FilePathType >( mDefaultPathsComboBox->currentData().toInt() ) == Qgis::FilePathType::Relative );
 
   mSettings->setEnumValue( QStringLiteral( "/qgis/defaultProjectFileFormat" ), mFileFormatQgsButton->isChecked() ? QgsProject::FileFormat::Qgs : QgsProject::FileFormat::Qgz );
 

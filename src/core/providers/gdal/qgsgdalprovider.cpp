@@ -45,6 +45,7 @@
 #include "qgsruntimeprofiler.h"
 #include "qgszipitem.h"
 #include "qgsprovidersublayerdetails.h"
+#include "qgsproviderutils.h"
 
 #include <QImage>
 #include <QColor>
@@ -1653,6 +1654,7 @@ QList<QgsProviderSublayerDetails> QgsGdalProvider::sublayerDetails( GDALDatasetH
   char **metadata = GDALGetMetadata( dataset, "SUBDATASETS" );
 
   QVariantMap uriParts = decodeGdalUri( baseUri );
+  const QString datasetPath = uriParts.value( QStringLiteral( "path" ) ).toString();
 
   if ( metadata )
   {
@@ -1678,10 +1680,10 @@ QList<QgsProviderSublayerDetails> QgsGdalProvider::sublayerDetails( GDALDatasetH
         else
         {
           // try to extract layer name from a path like 'NETCDF:"/baseUri":cell_node'
-          sepIdx = layerName.indexOf( baseUri + "\":" );
+          sepIdx = layerName.indexOf( datasetPath + "\":" );
           if ( sepIdx >= 0 )
           {
-            layerName = layerName.mid( layerName.indexOf( baseUri + "\":" ) + baseUri.length() + 2 );
+            layerName = layerName.mid( layerName.indexOf( datasetPath + "\":" ) + datasetPath.length() + 2 );
           }
         }
 
@@ -1692,10 +1694,12 @@ QList<QgsProviderSublayerDetails> QgsGdalProvider::sublayerDetails( GDALDatasetH
         details.setDescription( layerDesc );
         details.setLayerNumber( i );
 
-        QVariantMap layerUriParts = decodeGdalUri( uri );
+        const QVariantMap layerUriParts = decodeGdalUri( uri );
+        // update original uri parts with this layername and path -- this ensures that other uri components
+        // like open options are preserved for the sublayer uris
         uriParts.insert( QStringLiteral( "layerName" ), layerUriParts.value( QStringLiteral( "layerName" ) ) );
         uriParts.insert( QStringLiteral( "path" ), layerUriParts.value( QStringLiteral( "path" ) ) );
-        details.setUri( encodeGdalUri( layerUriParts ) );
+        details.setUri( encodeGdalUri( uriParts ) );
 
         res << details;
       }
@@ -3553,7 +3557,7 @@ QgsProviderMetadata::ProviderCapabilities QgsGdalProviderMetadata::providerCapab
   return FileBasedUris;
 }
 
-QList<QgsProviderSublayerDetails> QgsGdalProviderMetadata::querySublayers( const QString &uri, Qgis::SublayerQueryFlags flags, QgsFeedback * ) const
+QList<QgsProviderSublayerDetails> QgsGdalProviderMetadata::querySublayers( const QString &uri, Qgis::SublayerQueryFlags flags, QgsFeedback *feedback ) const
 {
   gdal::dataset_unique_ptr dataset;
 
@@ -3563,18 +3567,23 @@ QList<QgsProviderSublayerDetails> QgsGdalProviderMetadata::querySublayers( const
 
   QString gdalUri = uri;
 
+  QVariantMap uriParts = decodeUri( gdalUri );
+
   // Try to open using VSIFileHandler
   QString vsiPrefix = QgsZipItem::vsiPrefix( gdalUri );
   if ( !vsiPrefix.isEmpty() )
   {
     if ( !gdalUri.startsWith( vsiPrefix ) )
+    {
       gdalUri = vsiPrefix + gdalUri;
+      uriParts = decodeUri( gdalUri );
+    }
   }
 
   if ( flags & Qgis::SublayerQueryFlag::FastScan )
   {
     // filter based on extension
-    const QVariantMap uriParts = decodeUri( uri );
+    const QVariantMap uriParts = decodeUri( gdalUri );
     const QString path = uriParts.value( QStringLiteral( "path" ) ).toString();
     QFileInfo info( path );
     if ( info.isFile() )
@@ -3596,16 +3605,61 @@ QList<QgsProviderSublayerDetails> QgsGdalProviderMetadata::querySublayers( const
 
       if ( !sExtensions.contains( suffix ) )
       {
-        return {};
+        bool matches = false;
+        for ( const QString &wildcard : std::as_const( sWildcards ) )
+        {
+          const thread_local QRegularExpression rx( QRegularExpression::anchoredPattern(
+                QRegularExpression::wildcardToRegularExpression( wildcard )
+              ), QRegularExpression::CaseInsensitiveOption );
+          const QRegularExpressionMatch match = rx.match( info.fileName() );
+          if ( match.hasMatch() )
+          {
+            matches = true;
+            break;
+          }
+        }
+        if ( !matches )
+          return {};
       }
+    }
+  }
+
+  if ( !uriParts.value( QStringLiteral( "vsiPrefix" ) ).toString().isEmpty()
+       && uriParts.value( QStringLiteral( "vsiSuffix" ) ).toString().isEmpty() )
+  {
+    // get list of files inside archive file
+    QgsDebugMsgLevel( QStringLiteral( "Open file %1 with gdal vsi" ).arg( vsiPrefix + uriParts.value( QStringLiteral( "path" ) ).toString() ), 3 );
+    char **papszSiblingFiles = VSIReadDirRecursive( QString( vsiPrefix + uriParts.value( QStringLiteral( "path" ) ).toString() ).toLocal8Bit().constData() );
+    if ( papszSiblingFiles )
+    {
+      QList<QgsProviderSublayerDetails> res;
+
+      QStringList files;
+      for ( int i = 0; papszSiblingFiles[i]; i++ )
+      {
+        files << papszSiblingFiles[i];
+      }
+
+      for ( const QString &file : std::as_const( files ) )
+      {
+        if ( feedback && feedback->isCanceled() )
+          break;
+
+        // skip directories (files ending with /)
+        if ( file.right( 1 ) != QLatin1String( "/" ) )
+        {
+          uriParts.insert( QStringLiteral( "vsiSuffix" ), QStringLiteral( "/%1" ).arg( file ) );
+          res << querySublayers( encodeUri( uriParts ), flags, feedback );
+        }
+      }
+      CSLDestroy( papszSiblingFiles );
+      return res;
     }
   }
 
   dataset.reset( QgsGdalProviderBase::gdalOpen( gdalUri, GDAL_OF_READONLY ) );
   if ( !dataset )
   {
-    if ( CPLGetLastErrorNo() != CPLE_OpenFailed )
-      QgsDebugMsg( QStringLiteral( "Error querying sublayers: %1 " ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ) );
     return {};
   }
 
@@ -3623,10 +3677,15 @@ QList<QgsProviderSublayerDetails> QgsGdalProviderMetadata::querySublayers( const
 
       QString name;
       const QVariantMap parts = decodeUri( uri );
-      if ( parts.contains( QStringLiteral( "path" ) ) )
+      if ( !parts.value( QStringLiteral( "vsiSuffix" ) ).toString().isEmpty() )
       {
-        QFileInfo fi( parts.value( QStringLiteral( "path" ) ).toString() );
-        name = fi.baseName();
+        name = parts.value( QStringLiteral( "vsiSuffix" ) ).toString();
+        if ( name.startsWith( '/' ) )
+          name = name.mid( 1 );
+      }
+      else if ( parts.contains( QStringLiteral( "path" ) ) )
+      {
+        name = QgsProviderUtils::suggestLayerNameFromFilePath( parts.value( QStringLiteral( "path" ) ).toString() );
       }
       details.setName( name.isEmpty() ? uri : name );
       return {details};

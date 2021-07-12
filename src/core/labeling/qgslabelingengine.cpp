@@ -282,9 +282,9 @@ void QgsLabelingEngine::registerLabels( QgsRenderContext &context )
   for ( QgsAbstractLabelProvider *provider : std::as_const( mProviders ) )
   {
     std::unique_ptr< QgsExpressionContextScopePopper > layerScopePopper;
-    if ( QgsMapLayer *ml = provider->layer() )
+    if ( provider->layerExpressionContextScope() )
     {
-      layerScopePopper = std::make_unique< QgsExpressionContextScopePopper >( context.expressionContext(), QgsExpressionContextUtils::layerScope( ml ) );
+      layerScopePopper = std::make_unique< QgsExpressionContextScopePopper >( context.expressionContext(), new QgsExpressionContextScope( *provider->layerExpressionContextScope() ) );
     }
     processProvider( provider, context, *mPal );
   }
@@ -420,7 +420,9 @@ void QgsLabelingEngine::drawLabels( QgsRenderContext &context, const QString &la
 
     // provider will require the correct layer scope for expression preparation - at this stage, the existing expression context
     // only contains generic scopes
-    QgsExpressionContextScopePopper popper( context.expressionContext(), QgsExpressionContextUtils::layerScope( provider->layer() ) );
+    QgsExpressionContextScopePopper popper( context.expressionContext(), provider->layerExpressionContextScope() ? new QgsExpressionContextScope( *provider->layerExpressionContextScope() ) : new QgsExpressionContextScope() );
+
+    QgsScopedRenderContextReferenceScaleOverride referenceScaleOverride( context, provider->layerReferenceScale() );
     provider->startRender( context );
   }
 
@@ -444,6 +446,9 @@ void QgsLabelingEngine::drawLabels( QgsRenderContext &context, const QString &la
 
     context.expressionContext().setFeature( lf->feature() );
     context.expressionContext().setFields( lf->feature().fields() );
+
+    QgsScopedRenderContextReferenceScaleOverride referenceScaleOverride( context, lf->provider()->layerReferenceScale() );
+
     if ( lf->symbol() )
     {
       symbolScope = QgsExpressionContextUtils::updateSymbolScope( lf->symbol(), symbolScope );
@@ -468,6 +473,8 @@ void QgsLabelingEngine::drawLabels( QgsRenderContext &context, const QString &la
 
     context.expressionContext().setFeature( lf->feature() );
     context.expressionContext().setFields( lf->feature().fields() );
+
+    QgsScopedRenderContextReferenceScaleOverride referenceScaleOverride( context, lf->provider()->layerReferenceScale() );
     if ( lf->symbol() )
     {
       symbolScope = QgsExpressionContextUtils::updateSymbolScope( lf->symbol(), symbolScope );
@@ -495,6 +502,8 @@ void QgsLabelingEngine::drawLabels( QgsRenderContext &context, const QString &la
 
       context.expressionContext().setFeature( lf->feature() );
       context.expressionContext().setFields( lf->feature().fields() );
+
+      QgsScopedRenderContextReferenceScaleOverride referenceScaleOverride( context, lf->provider()->layerReferenceScale() );
       if ( lf->symbol() )
       {
         symbolScope = QgsExpressionContextUtils::updateSymbolScope( lf->symbol(), symbolScope );
@@ -623,6 +632,12 @@ QgsAbstractLabelProvider::QgsAbstractLabelProvider( QgsMapLayer *layer, const QS
   , mPriority( 0.5 )
   , mUpsidedownLabels( QgsPalLayerSettings::Upright )
 {
+  if ( QgsVectorLayer *vl = qobject_cast< QgsVectorLayer * >( layer ) )
+  {
+    mLayerExpressionContextScope.reset( vl->createExpressionContextScope() );
+    if ( const QgsFeatureRenderer *renderer = vl->renderer() )
+      mLayerReferenceScale = renderer->referenceScale();
+  }
 }
 
 void QgsAbstractLabelProvider::drawUnplacedLabel( QgsRenderContext &, pal::LabelPosition * ) const
@@ -651,6 +666,11 @@ void QgsAbstractLabelProvider::stopRender( QgsRenderContext &context )
   {
     subProvider->stopRender( context );
   }
+}
+
+QgsExpressionContextScope *QgsAbstractLabelProvider::layerExpressionContextScope() const
+{
+  return mLayerExpressionContextScope.get();
 }
 
 //

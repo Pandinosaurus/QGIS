@@ -32,7 +32,7 @@ class CORE_EXPORT QgsPathResolver
 {
   public:
     //! Initialize path resolver with a base filename. Null filename means no conversion between relative/absolute path
-    explicit QgsPathResolver( const QString &baseFileName = QString() );
+    explicit QgsPathResolver( const QString &baseFileName = QString(), const QString &attachmentDir = QString() );
 
     /**
      * Prepare a filename to save it to the project file.
@@ -213,7 +213,7 @@ class CORE_EXPORT QgsPathResolver
      *
      * \code{.py}
      *   def my_processor(path):
-     *      return path.replace('c:/Users/ClintBarton/Documents/Projects', '@projectdir@')
+     *      return path.replace('c:/Users/ClintBarton/Documents/Projects', '$projectdir$')
      *
      *   QgsPathResolver.setPathWriter(my_processor)
      * \endcode
@@ -284,6 +284,8 @@ class CORE_EXPORT QgsPathResolver
   private:
     //! path to a file that is the base for relative path resolution
     QString mBaseFileName;
+    //! path where attached files are stored
+    QString mAttachmentDir;
 };
 
 #endif // QGSPATHRESOLVER_H

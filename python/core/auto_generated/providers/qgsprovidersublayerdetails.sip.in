@@ -84,6 +84,8 @@ Constructor for LayerOptions with ``transformContext``.
 %End
 
       QgsCoordinateTransformContext transformContext;
+
+      bool loadDefaultStyle;
     };
 
     QgsMapLayer *toLayer( const LayerOptions &options ) const /Factory/;
@@ -210,6 +212,9 @@ Sets the associated layer ``number``, for providers which order sublayers.
 
 .. seealso:: :py:func:`layerNumber`
 %End
+
+    bool operator==( const QgsProviderSublayerDetails &other ) const;
+    bool operator!=( const QgsProviderSublayerDetails &other ) const;
 
 };
 

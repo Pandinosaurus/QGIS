@@ -27,6 +27,8 @@ email                : nyall dot dawson at gmail dot com
 #include "qgsprojectstorageregistry.h"
 #include "qgsgeopackageproviderconnection.h"
 #include "qgsogrdbconnection.h"
+#include "qgsprovidersublayerdetails.h"
+#include "qgszipitem.h"
 
 #include <QFileInfo>
 #include <QFile>
@@ -77,15 +79,13 @@ QVariantMap QgsOgrProviderMetadata::decodeUri( const QString &uri ) const
   if ( path.startsWith( vsiPrefix, Qt::CaseInsensitive ) )
   {
     path = path.mid( vsiPrefix.count() );
-    if ( vsiPrefix == QLatin1String( "/vsizip/" ) )
+
+    const QRegularExpression vsiRegex( QStringLiteral( "(?:\\.zip|\\.tar|\\.gz|\\.tar\\.gz|\\.tgz)([^|]+)" ) );
+    QRegularExpressionMatch match = vsiRegex.match( path );
+    if ( match.hasMatch() )
     {
-      const QRegularExpression vsiRegex( QStringLiteral( "(?:\\.zip|\\.tar|\\.gz|\\.tar\\.gz|\\.tgz)([^|]*)" ) );
-      QRegularExpressionMatch match = vsiRegex.match( path );
-      if ( match.hasMatch() )
-      {
-        vsiSuffix = match.captured( 1 );
-        path = path.remove( match.capturedStart( 1 ), match.capturedLength( 1 ) );
-      }
+      vsiSuffix = match.captured( 1 );
+      path = path.remove( match.capturedStart( 1 ), match.capturedLength( 1 ) );
     }
   }
   else
@@ -1026,6 +1026,182 @@ bool QgsOgrProviderMetadata::uriIsBlocklisted( const QString &uri ) const
     return true;
 
   return false;
+}
+
+QList<QgsProviderSublayerDetails> QgsOgrProviderMetadata::querySublayers( const QString &u, Qgis::SublayerQueryFlags flags, QgsFeedback *feedback ) const
+{
+  QString uri = u;
+  QStringList options { QStringLiteral( "@LIST_ALL_TABLES=YES" ) };
+
+  QVariantMap uriParts = decodeUri( uri );
+
+  // Try to open using VSIFileHandler
+  QString vsiPrefix = QgsZipItem::vsiPrefix( uri );
+  if ( !vsiPrefix.isEmpty() && uriParts.value( QStringLiteral( "vsiPrefix" ) ).toString().isEmpty() )
+  {
+    if ( !uri.startsWith( vsiPrefix ) )
+    {
+      // update zip etc to use vsi prefix if it wasn't explicitly specified
+      uri = vsiPrefix + uri;
+      uriParts = decodeUri( uri );
+    }
+  }
+
+  if ( !uriParts.value( QStringLiteral( "vsiPrefix" ) ).toString().isEmpty()
+       && uriParts.value( QStringLiteral( "vsiSuffix" ) ).toString().isEmpty() )
+  {
+    // get list of files inside archive file
+    QgsDebugMsgLevel( QStringLiteral( "Open file %1 with gdal vsi" ).arg( vsiPrefix + uriParts.value( QStringLiteral( "path" ) ).toString() ), 3 );
+    char **papszSiblingFiles = VSIReadDirRecursive( QString( vsiPrefix + uriParts.value( QStringLiteral( "path" ) ).toString() ).toLocal8Bit().constData() );
+    if ( papszSiblingFiles )
+    {
+      QList<QgsProviderSublayerDetails> res;
+
+      QStringList files;
+      for ( int i = 0; papszSiblingFiles[i]; i++ )
+      {
+        files << papszSiblingFiles[i];
+      }
+
+      for ( const QString &file : std::as_const( files ) )
+      {
+        if ( feedback && feedback->isCanceled() )
+          break;
+
+        // ugly hack to remove .dbf file if there is a .shp file
+        QFileInfo info( file );
+        if ( info.suffix().compare( QLatin1String( "dbf" ), Qt::CaseInsensitive ) == 0 )
+        {
+          if ( files.contains( file.left( file.size() - 4 ) + ".shp" ) )
+            continue;
+        }
+        if ( info.completeSuffix().compare( QLatin1String( "shp.xml" ), Qt::CaseInsensitive ) == 0
+             || info.completeSuffix().compare( QLatin1String( "shx" ), Qt::CaseInsensitive ) == 0 )
+        {
+          continue;
+        }
+
+        // skip directories (files ending with /)
+        if ( file.right( 1 ) != QLatin1String( "/" ) )
+        {
+          uriParts.insert( QStringLiteral( "vsiSuffix" ), QStringLiteral( "/%1" ).arg( file ) );
+          res << querySublayers( encodeUri( uriParts ), flags, feedback );
+        }
+      }
+      CSLDestroy( papszSiblingFiles );
+      return res;
+    }
+  }
+
+  const QString originalUriLayerName = uriParts.value( QStringLiteral( "layerName" ) ).toString();
+  int layerId = 0;
+  bool originalUriLayerIdWasSpecified = false;
+  const int uriLayerId = uriParts.value( QStringLiteral( "layerId" ) ).toInt( &originalUriLayerIdWasSpecified );
+  if ( originalUriLayerIdWasSpecified )
+    layerId = uriLayerId;
+
+  QString errCause;
+
+  QVariantMap firstLayerUriParts;
+  if ( !uriParts.value( QStringLiteral( "vsiPrefix" ) ).toString().isEmpty() )
+    firstLayerUriParts.insert( QStringLiteral( "vsiPrefix" ), uriParts.value( QStringLiteral( "vsiPrefix" ) ) );
+  if ( !uriParts.value( QStringLiteral( "vsiSuffix" ) ).toString().isEmpty() )
+    firstLayerUriParts.insert( QStringLiteral( "vsiSuffix" ), uriParts.value( QStringLiteral( "vsiSuffix" ) ) );
+  firstLayerUriParts.insert( QStringLiteral( "path" ), uriParts.value( QStringLiteral( "path" ) ) );
+
+  QgsOgrLayerUniquePtr firstLayer = QgsOgrProviderUtils::getLayer( encodeUri( firstLayerUriParts ), false, options, layerId, errCause, true );
+  if ( !firstLayer )
+    return {};
+
+  const QString driverName = firstLayer->driverName();
+
+  const int layerCount = firstLayer->GetLayerCount();
+
+  QList<QgsProviderSublayerDetails> res;
+  if ( layerCount == 1 )
+  {
+    res << QgsOgrProviderUtils::querySubLayerList( 0, firstLayer.get(), driverName, flags, false, uri, true, feedback );
+  }
+  else
+  {
+    // In case there is no free opened dataset in the cache, keep the first
+    // layer alive while we iterate over the other layers, so that we can
+    // reuse the same dataset. Can help in a particular with a FileGDB with
+    // the FileGDB driver
+    for ( int i = 0; i < layerCount; i++ )
+    {
+      if ( feedback && feedback->isCanceled() )
+        break;
+
+      QString errCause;
+      QgsOgrLayerUniquePtr layer;
+
+      if ( i != 0 )
+      {
+        layer = QgsOgrProviderUtils::getLayer( firstLayer->datasetName(),
+                                               false,
+                                               firstLayer->options(),
+                                               i,
+                                               errCause,
+                                               // do not check timestamp beyond the first
+                                               // layer
+                                               firstLayer == nullptr );
+        if ( !layer )
+          continue;
+      }
+
+      res << QgsOgrProviderUtils::querySubLayerList( i, i == 0 ? firstLayer.get() : layer.get(), driverName, flags, false, uri, false, feedback );
+    }
+  }
+
+  // Systematically add a layerName= option to all OGR sublayers in case
+  // the current single layer dataset becomes layer a multi-layer one.
+  // (Except for a few select extensions, known to be always single layer dataset!)
+  for ( int i = 0; i < res.count(); ++i )
+  {
+    QVariantMap parts = decodeUri( res.at( i ).uri() );
+    if ( !parts.value( QStringLiteral( "layerName" ) ).toString().isEmpty() ||
+         !parts.value( QStringLiteral( "layerId" ) ).toString().isEmpty() )
+      continue;
+
+    bool isAlwaysSingleLayerDataset = false;
+    const QFileInfo fi( parts.value( QStringLiteral( "path" ) ).toString() );
+    if ( fi.isFile() )
+    {
+      const QString ext = fi.suffix().toLower();
+      isAlwaysSingleLayerDataset = ext == QLatin1String( "shp" ) ||
+                                   ext == QLatin1String( "mif" ) ||
+                                   ext == QLatin1String( "tab" ) ||
+                                   ext == QLatin1String( "csv" ) ||
+                                   ext == QLatin1String( "geojson" );
+    }
+    if ( isAlwaysSingleLayerDataset )
+      continue;
+
+    parts.insert( QStringLiteral( "layerName" ), res.at( i ).name() );
+    res[i].setUri( encodeUri( parts ) );
+  }
+
+  if ( !originalUriLayerName.isEmpty() )
+  {
+    // remove non-matching, unwanted layers
+    res.erase( std::remove_if( res.begin(), res.end(), [ = ]( const QgsProviderSublayerDetails & sublayer )
+    {
+      const QVariantMap uriParts = decodeUri( sublayer.uri() );
+      return uriParts.value( QStringLiteral( "layerName" ) ).toString() != originalUriLayerName && sublayer.name() != originalUriLayerName;
+    } ), res.end() );
+  }
+
+  if ( originalUriLayerIdWasSpecified )
+  {
+    // remove non-matching, unwanted layers
+    res.erase( std::remove_if( res.begin(), res.end(), [ = ]( const QgsProviderSublayerDetails & sublayer )
+    {
+      return sublayer.layerNumber() != uriLayerId;
+    } ), res.end() );
+  }
+
+  return res;
 }
 
 QMap<QString, QgsAbstractProviderConnection *> QgsOgrProviderMetadata::connections( bool cached )

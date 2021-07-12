@@ -21,7 +21,7 @@ Resolves relative paths into absolute paths and vice versa. Used for writing
 #include "qgspathresolver.h"
 %End
   public:
-    explicit QgsPathResolver( const QString &baseFileName = QString() );
+    explicit QgsPathResolver( const QString &baseFileName = QString(), const QString &attachmentDir = QString() );
 %Docstring
 Initialize path resolver with a base filename. Null filename means no conversion between relative/absolute path
 %End
@@ -121,7 +121,7 @@ Removes the custom pre-processor function with matching ``id``.
 
 The ``id`` must correspond to a pre-processor previously added via a call to :py:func:`~QgsPathResolver.setPathPreprocessor`.
 
-:raises `KeyError` if no processor with the specified ``id`` exists.
+:raises KeyError: if no processor with the specified ``id`` exists.
 
 .. seealso:: :py:func:`setPathPreprocessor`
 
@@ -156,7 +156,7 @@ Example - replace path with a variable:
 .. code-block:: python
 
        def my_processor(path):
-          return path.replace('c:/Users/ClintBarton/Documents/Projects', '@projectdir@')
+          return path.replace('c:/Users/ClintBarton/Documents/Projects', '$projectdir$')
 
        QgsPathResolver.setPathWriter(my_processor)
 

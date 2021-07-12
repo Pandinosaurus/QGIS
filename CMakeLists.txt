@@ -138,6 +138,11 @@ if(WITH_CORE)
 
   set (WITH_GUI TRUE CACHE BOOL "Determines whether QGIS GUI library (and everything built on top of it) should be built")
 
+  set (WITH_OAUTH2_PLUGIN TRUE CACHE BOOL "Build OAuth2 authentication method plugin")
+  if(WITH_OAUTH2_PLUGIN)
+    set(HAVE_OAUTH2_PLUGIN TRUE)
+  endif()
+
   set (WITH_AUTH TRUE CACHE BOOL "Determines whether QGIS authentication methods should be built")
 
   set (WITH_ANALYSIS TRUE CACHE BOOL "Determines whether QGIS analysis library should be built")
@@ -306,25 +311,8 @@ if(WITH_CORE)
     set (USING_NINJA TRUE)
   endif()
 
-  #############################################################
-  # check if lexer and parser are not missing
-  # http://www.mail-archive.com/cmake@cmake.org/msg02861.html
-
-  include(Flex)
-
-  FIND_FLEX()
-
-  if (NOT FLEX_EXECUTABLE)
-    message(FATAL_ERROR "Couldn't find Flex")
-  endif()
-
-  include(Bison)
-
-  FIND_BISON()
-
-  if (NOT BISON_EXECUTABLE)
-    message(FATAL_ERROR "Couldn't find Bison")
-  endif()
+  find_package(FLEX 2.6 REQUIRED)
+  find_package(BISON REQUIRED)
 
   #############################################################
   # search for dependencies
@@ -367,6 +355,8 @@ if(WITH_CORE)
   endif()
   find_package(ZLIB REQUIRED)       # for decompression of vector tiles in MBTiles file
   message(STATUS "Found zlib: ${ZLIB_LIBRARIES}")
+
+  find_package(EXIV2 REQUIRED)
 
   # optional
   if (WITH_POSTGRESQL)
@@ -630,7 +620,7 @@ if (PEDANTIC)
     # add_definitions( -fstrict-aliasing -Wstrict-aliasing=1 -Wredundant-decls )
 
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type-c-linkage -Wno-overloaded-virtual -Wimplicit-fallthrough")
+       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type-c-linkage -Woverloaded-virtual -Wimplicit-fallthrough")
     endif()
 
     # add any extra CXXFLAGS flags set by user. can be -D CXX_EXTRA_FLAGS or environment variable
@@ -951,7 +941,7 @@ if (WITH_CORE AND WITH_BINDINGS AND NOT WITH_QT6)
   include(SIPMacros)
 
   set(SIP_INCLUDES ${PYQT_SIP_DIR} ${CMAKE_SOURCE_DIR}/python)
-  set(SIP_CONCAT_PARTS 13)
+  set(SIP_CONCAT_PARTS 14)
 
   if (NOT BINDINGS_GLOBAL_INSTALL)
     set(Python_SITEARCH ${QGIS_DATA_DIR}/python)
