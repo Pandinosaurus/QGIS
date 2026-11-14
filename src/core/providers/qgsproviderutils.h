@@ -16,8 +16,9 @@
 #ifndef QGSPROVIDERUTILS_H
 #define QGSPROVIDERUTILS_H
 
-#include "qgis_core.h"
 #include "qgis.h"
+#include "qgis_core.h"
+
 #include <QList>
 
 class QgsProviderSublayerDetails;
@@ -33,11 +34,10 @@ class QgsProviderSublayerDetails;
 class CORE_EXPORT QgsProviderUtils
 {
   public:
-
     /**
      * Flags which control how QgsProviderUtils::sublayerDetailsAreIncomplete() tests for completeness.
      */
-    enum class SublayerCompletenessFlag : int
+    enum class SublayerCompletenessFlag : int SIP_ENUM_BASETYPE( IntFlag )
     {
       IgnoreUnknownFeatureCount = 1 << 0, //!< Indicates that an unknown feature count should not be considered as incomplete
       IgnoreUnknownGeometryType = 1 << 1, //!< Indicates that an unknown geometry type should not be considered as incomplete
@@ -65,12 +65,8 @@ class CORE_EXPORT QgsProviderUtils
      * a path of "c:/my data/water/rivers/hdr.adf").
      */
     static QString suggestLayerNameFromFilePath( const QString &path );
-
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS( QgsProviderUtils::SublayerCompletenessFlags )
 
 #endif //QGSPROVIDERUTILS_H
-
-
-

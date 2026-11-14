@@ -15,16 +15,20 @@
 
 #include "qgsmaplayerstyleguiutils.h"
 
-#include <QAction>
-#include <QInputDialog>
-#include <QMenu>
-#include <QActionGroup>
-
 #include "qgslogger.h"
 #include "qgsmapcanvas.h"
 #include "qgsmaplayer.h"
 #include "qgsmaplayerstylemanager.h"
 
+#include <QAction>
+#include <QActionGroup>
+#include <QInputDialog>
+#include <QMenu>
+#include <QString>
+
+#include "moc_qgsmaplayerstyleguiutils.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsMapLayerStyleGuiUtils *QgsMapLayerStyleGuiUtils::instance()
 {
@@ -82,7 +86,7 @@ QList<QAction *> QgsMapLayerStyleGuiUtils::actionsUseStyle( QgsMapLayer *layer, 
 
 void QgsMapLayerStyleGuiUtils::addStyleManagerActions( QMenu *m, QgsMapLayer *layer )
 {
-  if ( ! layer )
+  if ( !layer )
     return;
 
   m->addAction( actionAddStyle( layer, m ) );
@@ -90,7 +94,7 @@ void QgsMapLayerStyleGuiUtils::addStyleManagerActions( QMenu *m, QgsMapLayer *la
     m->addAction( actionRemoveStyle( layer, m ) );
   m->addAction( actionRenameStyle( layer, m ) );
   m->addSeparator();
-  const auto actions {actionsUseStyle( layer, m )};
+  const auto actions { actionsUseStyle( layer, m ) };
   for ( QAction *a : actions )
     m->addAction( a );
 }
@@ -118,7 +122,6 @@ void QgsMapLayerStyleGuiUtils::removesExtraMenuSeparators( QMenu *m )
         gotFirstSeparator = true;
     }
   }
-
 }
 
 void QgsMapLayerStyleGuiUtils::addStyle()
@@ -131,9 +134,7 @@ void QgsMapLayerStyleGuiUtils::addStyle()
     return;
 
   bool ok;
-  const QString text = QInputDialog::getText( nullptr, tr( "New Style" ),
-                       tr( "Style name:" ), QLineEdit::Normal,
-                       QStringLiteral( "new style" ), &ok );
+  const QString text = QInputDialog::getText( nullptr, tr( "New Style" ), tr( "Style name:" ), QLineEdit::Normal, u"new style"_s, &ok );
   if ( !ok || text.isEmpty() )
     return;
 
@@ -145,7 +146,7 @@ void QgsMapLayerStyleGuiUtils::addStyle()
   }
   else
   {
-    QgsDebugMsg( "Failed to add style: " + text );
+    QgsDebugError( "Failed to add style: " + text );
   }
 }
 
@@ -162,7 +163,7 @@ void QgsMapLayerStyleGuiUtils::useStyle()
   const bool res = layer->styleManager()->setCurrentStyle( name );
   if ( !res )
   {
-    QgsDebugMsg( "Failed to set current style: " + name );
+    QgsDebugError( "Failed to set current style: " + name );
   }
 }
 
@@ -179,7 +180,7 @@ void QgsMapLayerStyleGuiUtils::removeStyle()
   const bool res = layer->styleManager()->removeStyle( layer->styleManager()->currentStyle() );
   if ( !res )
   {
-    QgsDebugMsg( QStringLiteral( "Failed to remove current style" ) );
+    QgsDebugError( u"Failed to remove current style"_s );
   }
 }
 
@@ -196,15 +197,13 @@ void QgsMapLayerStyleGuiUtils::renameStyle()
   const QString name = layer->styleManager()->currentStyle();
 
   bool ok;
-  const QString text = QInputDialog::getText( nullptr, tr( "Rename Style" ),
-                       tr( "Style name:" ), QLineEdit::Normal,
-                       name, &ok );
+  const QString text = QInputDialog::getText( nullptr, tr( "Rename Style" ), tr( "Style name:" ), QLineEdit::Normal, name, &ok );
   if ( !ok )
     return;
 
   const bool res = layer->styleManager()->renameStyle( name, text );
   if ( !res )
   {
-    QgsDebugMsg( "Failed to rename style: " + name );
+    QgsDebugError( "Failed to rename style: " + name );
   }
 }

@@ -18,9 +18,11 @@
 #ifndef QGSPROVIDERSUBLAYERTASKTASK_H
 #define QGSPROVIDERSUBLAYERTASKTASK_H
 
-#include "qgstaskmanager.h"
-#include <QReadWriteLock>
 #include <memory>
+
+#include "qgstaskmanager.h"
+
+#include <QReadWriteLock>
 
 class QgsFeedback;
 class QgsProviderSublayerDetails;
@@ -48,12 +50,19 @@ class CORE_EXPORT QgsProviderSublayerTask : public QgsTask
     Q_OBJECT
 
   public:
-
     /**
      * Constructor for QgsProviderSublayerTask, which retrieves sublayer details for the
      * specified \a uri.
      */
     QgsProviderSublayerTask( const QString &uri, bool includeSystemTables = false );
+
+    /**
+     * Constructor for QgsProviderSublayerTask, which retrieves sublayer details for the
+     * specified \a uri, restricted to a particular provider.
+     *
+     * \since QGIS 3.30
+     */
+    QgsProviderSublayerTask( const QString &uri, const QString &providerKey, bool includeSystemTables = false );
 
     ~QgsProviderSublayerTask() override;
 
@@ -65,12 +74,12 @@ class CORE_EXPORT QgsProviderSublayerTask : public QgsTask
     void cancel() override;
 
   protected:
-
     bool run() override;
 
   private:
-
     QString mUri;
+
+    QString mProviderKey;
 
     bool mIncludeSystemTables = false;
 
@@ -79,7 +88,6 @@ class CORE_EXPORT QgsProviderSublayerTask : public QgsTask
     QList<QgsProviderSublayerDetails> mResults;
 
     mutable QReadWriteLock mLock;
-
 };
 
 #endif // QGSPROVIDERSUBLAYERTASKTASK_H

@@ -18,8 +18,13 @@
 
 
 #include "qgsserverfilter.h"
-#include "qgslogger.h"
+
 #include "qgis.h"
+#include "qgslogger.h"
+
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 /**
  * QgsServerFilter
@@ -28,24 +33,23 @@
  *
  */
 
-QgsServerFilter::QgsServerFilter( QgsServerInterface *serverInterface ):
-  mServerInterface( serverInterface )
-{
-}
+QgsServerFilter::QgsServerFilter( QgsServerInterface *serverInterface )
+  : mServerInterface( serverInterface )
+{}
 
 void QgsServerFilter::requestReady()
 {
-  QgsDebugMsg( QStringLiteral( "QgsServerFilter plugin default requestReady called" ) );
+  QgsDebugMsgLevel( u"QgsServerFilter plugin default requestReady called"_s, 2 );
 }
 
 void QgsServerFilter::responseComplete()
 {
-  QgsDebugMsg( QStringLiteral( "QgsServerFilter plugin default responseComplete called" ) );
+  QgsDebugMsgLevel( u"QgsServerFilter plugin default responseComplete called"_s, 2 );
 }
 
 void QgsServerFilter::sendResponse()
 {
-  QgsDebugMsg( QStringLiteral( "QgsServerFilter plugin default sendResponse called" ) );
+  QgsDebugMsgLevel( u"QgsServerFilter plugin default sendResponse called"_s, 2 );
 }
 
 bool QgsServerFilter::onRequestReady()
@@ -53,6 +57,11 @@ bool QgsServerFilter::onRequestReady()
   Q_NOWARN_DEPRECATED_PUSH
   requestReady();
   Q_NOWARN_DEPRECATED_POP
+  return true;
+}
+
+bool QgsServerFilter::onProjectReady()
+{
   return true;
 }
 
@@ -71,5 +80,3 @@ bool QgsServerFilter::onSendResponse()
   Q_NOWARN_DEPRECATED_POP
   return true;
 }
-
-

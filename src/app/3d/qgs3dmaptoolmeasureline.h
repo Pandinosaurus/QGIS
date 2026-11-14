@@ -16,19 +16,14 @@
 #ifndef QGS3DMAPTOOLMEASURELINE_H
 #define QGS3DMAPTOOLMEASURELINE_H
 
-#include "qgs3dmaptool.h"
-#include "qgsvector3d.h"
-#include "qgspoint.h"
-
 #include <memory>
 
-namespace Qt3DRender
-{
-  class QPickEvent;
-}
+#include "qgs3dmaptool.h"
+#include "qgs3dmeasuredialog.h"
+#include "qgspoint.h"
+#include "qobjectuniqueptr.h"
 
-class Qgs3DMapToolMeasureLinePickHandler;
-class Qgs3DMeasureDialog;
+class Qgs3DMapCanvasWidget;
 class QgsRubberBand3D;
 
 
@@ -37,7 +32,7 @@ class Qgs3DMapToolMeasureLine : public Qgs3DMapTool
     Q_OBJECT
 
   public:
-    Qgs3DMapToolMeasureLine( Qgs3DMapCanvas *canvas );
+    Qgs3DMapToolMeasureLine( Qgs3DMapCanvasWidget *canvas );
     ~Qgs3DMapToolMeasureLine() override;
 
     //! When we have added our last point, and not following
@@ -64,18 +59,13 @@ class Qgs3DMapToolMeasureLine : public Qgs3DMapTool
     QCursor cursor() const override;
 
   private slots:
-    void onTerrainPicked( Qt3DRender::QPickEvent *event );
-    void onTerrainEntityChanged();
-    void handleClick( Qt3DRender::QPickEvent *event, const QgsVector3D &worldIntersection );
-    void onMapSettingsChanged() override;
+    void handleClick( const QPoint &screenPos );
+    void mousePressEvent( QMouseEvent *event ) override;
+    void mouseReleaseEvent( QMouseEvent *event ) override;
+    void mouseMoveEvent( QMouseEvent *event ) override;
+    void keyPressEvent( QKeyEvent *event ) override;
 
   private:
-    std::unique_ptr<Qgs3DMapToolMeasureLinePickHandler> mPickHandler;
-
-    friend class Qgs3DMapToolMeasureLinePickHandler;
-
-    bool mIsAlreadyActivated = false;
-
     //! Store points
     QVector<QgsPoint> mPoints;
 
@@ -83,10 +73,13 @@ class Qgs3DMapToolMeasureLine : public Qgs3DMapTool
     bool mDone = true;
 
     //! Dialog
-    Qgs3DMeasureDialog *mDialog = nullptr;
+    QObjectUniquePtr<Qgs3DMeasureDialog> mDialog = nullptr;
 
     std::unique_ptr<QgsRubberBand3D> mRubberBand;
 
+    //! Check if mouse was moved between mousePress and mouseRelease
+    bool mMouseHasMoved = false;
+    QPoint mMouseClickPos;
 };
 
 #endif // QGS3DMAPTOOLMEASURELINE_H

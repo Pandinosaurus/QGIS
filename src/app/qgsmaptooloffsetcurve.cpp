@@ -13,29 +13,37 @@
  *                                                                         *
  ***************************************************************************/
 
+#include "qgsmaptooloffsetcurve.h"
+
+#include "qgisapp.h"
+#include "qgsavoidintersectionsoperation.h"
+#include "qgsdoublespinbox.h"
+#include "qgsfeatureiterator.h"
+#include "qgslogger.h"
+#include "qgsmapcanvas.h"
+#include "qgsmapmouseevent.h"
+#include "qgsproject.h"
+#include "qgsrubberband.h"
+#include "qgssettingsentryenumflag.h"
+#include "qgssettingsentryimpl.h"
+#include "qgssettingsregistrycore.h"
+#include "qgssnapindicator.h"
+#include "qgssnappingutils.h"
+#include "qgsvectorlayer.h"
+#include "qgsvectorlayerutils.h"
+
 #include <QGraphicsProxyWidget>
 #include <QGridLayout>
 #include <QLabel>
+#include <QString>
 
-#include "qgsdoublespinbox.h"
-#include "qgsfeatureiterator.h"
-#include "qgsmaptooloffsetcurve.h"
-#include "qgsmapcanvas.h"
-#include "qgsproject.h"
-#include "qgsrubberband.h"
-#include "qgssnappingutils.h"
-#include "qgsvectorlayer.h"
-#include "qgssnapindicator.h"
-#include "qgssnappingconfig.h"
-#include "qgssettingsregistrycore.h"
-#include "qgisapp.h"
-#include "qgsmapmouseevent.h"
-#include "qgslogger.h"
-#include "qgsvectorlayerutils.h"
+#include "moc_qgsmaptooloffsetcurve.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsMapToolOffsetCurve::QgsMapToolOffsetCurve( QgsMapCanvas *canvas )
   : QgsMapToolEdit( canvas )
-  , mSnapIndicator( std::make_unique< QgsSnapIndicator >( canvas ) )
+  , mSnapIndicator( std::make_unique<QgsSnapIndicator>( canvas ) )
 {
   mToolName = tr( "Map tool offset curve" );
 }
@@ -82,8 +90,7 @@ void QgsMapToolOffsetCurve::canvasReleaseEvent( QgsMapMouseEvent *e )
     }
     else
     {
-      match = mCanvas->snappingUtils()->snapToCurrentLayer( e->pos(),
-              QgsPointLocator::Types( QgsPointLocator::Edge | QgsPointLocator::Area ) );
+      match = mCanvas->snappingUtils()->snapToCurrentLayer( e->pos(), QgsPointLocator::Types( QgsPointLocator::Edge | QgsPointLocator::Area ) );
     }
 
     if ( auto *lLayer = match.layer() )
@@ -95,7 +102,7 @@ void QgsMapToolOffsetCurve::canvasReleaseEvent( QgsMapMouseEvent *e )
         mSourceFeature = fet;
         mCtrlHeldOnFirstClick = ( e->modifiers() & Qt::ControlModifier ); //no geometry modification if ctrl is pressed
         prepareGeometry( match, fet );
-        mRubberBand = createRubberBand();
+        mRubberBand = createRubberBandForLayer( lLayer, { fet.id() } );
         if ( mRubberBand )
         {
           mRubberBand->setToGeometry( mManipulatedGeometry, lLayer );
@@ -107,12 +114,8 @@ void QgsMapToolOffsetCurve::canvasReleaseEvent( QgsMapMouseEvent *e )
         const bool hasM = QgsWkbTypes::hasZ( mSourceLayer->wkbType() );
         if ( hasZ || hasM )
         {
-          emit messageEmitted( QStringLiteral( "layer %1 has %2%3%4 geometry. %2%3%4 values be set to 0 when using offset tool." )
-                               .arg( mSourceLayer->name(),
-                                     hasZ ? QStringLiteral( "Z" ) : QString(),
-                                     hasZ && hasM ? QStringLiteral( "/" ) : QString(),
-                                     hasM ? QStringLiteral( "M" ) : QString() )
-                               , Qgis::MessageLevel::Warning );
+          emit
+            messageEmitted( u"layer %1 has %2%3%4 geometry. %2%3%4 values be set to 0 when using offset tool."_s.arg( mSourceLayer->name(), hasZ ? u"Z"_s : QString(), hasZ && hasM ? u"/"_s : QString(), hasM ? u"M"_s : QString() ), Qgis::MessageLevel::Warning );
         }
       }
     }
@@ -161,8 +164,8 @@ void QgsMapToolOffsetCurve::applyOffset( double offset, Qt::KeyboardModifiers mo
   {
     QgsGeometry geometry;
     int partIndex = 0;
-    const QgsWkbTypes::Type geomType = mOriginalGeometry.wkbType();
-    if ( QgsWkbTypes::geometryType( geomType ) == QgsWkbTypes::LineGeometry )
+    const Qgis::WkbType geomType = mOriginalGeometry.wkbType();
+    if ( QgsWkbTypes::geometryType( geomType ) == Qgis::GeometryType::Line )
     {
       QgsMultiPolylineXY newMultiLine;
       const QgsMultiPolylineXY multiLine = mOriginalGeometry.asMultiPolyline();
@@ -339,11 +342,32 @@ void QgsMapToolOffsetCurve::applyOffset( double offset, Qt::KeyboardModifiers mo
     return;
   }
 
-  QgsVectorLayer *destLayer = qobject_cast< QgsVectorLayer * >( canvas()->currentLayer() );
+  QgsVectorLayer *destLayer = qobject_cast<QgsVectorLayer *>( canvas()->currentLayer() );
   if ( !destLayer )
     return;
 
   destLayer->beginEditCommand( tr( "Offset curve" ) );
+
+  QgsAvoidIntersectionsOperation avoidIntersections;
+
+  connect( &avoidIntersections, &QgsAvoidIntersectionsOperation::messageEmitted, this, &QgsMapTool::messageEmitted );
+
+  const QSet<QgsFeatureId> ignoredFeatures = ( modifiers & Qt::ControlModifier ) ? QSet<QgsFeatureId>() : QSet<QgsFeatureId>( { mModifiedFeature } );
+
+  const QHash<QgsVectorLayer *, QSet<QgsFeatureId>> ignoreFeatures = { { destLayer, { ignoredFeatures } } };
+
+  const QgsAvoidIntersectionsOperation::Result res = avoidIntersections.apply( destLayer, mModifiedFeature, mModifiedGeometry, ignoreFeatures );
+
+  if ( res.operationResult == Qgis::GeometryOperationResult::InvalidInputGeometryType || mModifiedGeometry.isEmpty() )
+  {
+    const QString errorMessage = ( mModifiedGeometry.isEmpty() ) ? tr( "The feature cannot be modified because the resulting geometry would be empty" )
+                                                                 : tr( "An error was reported during intersection removal" );
+
+    emit messageEmitted( errorMessage, Qgis::MessageLevel::Warning );
+    destLayer->destroyEditCommand();
+    cancel();
+    return;
+  }
 
   bool editOk = true;
   if ( !mCtrlHeldOnFirstClick && !( modifiers & Qt::ControlModifier ) )
@@ -369,7 +393,7 @@ void QgsMapToolOffsetCurve::applyOffset( double offset, Qt::KeyboardModifiers mo
         QgsAttributeMap attrs;
         for ( int idx = 0; idx < destLayer->fields().count(); ++idx )
         {
-          if ( !feature.attribute( idx ).isNull() )
+          if ( !QgsVariantUtils::isNull( feature.attribute( idx ) ) )
             attrs[idx] = feature.attribute( idx );
         }
 
@@ -393,7 +417,7 @@ void QgsMapToolOffsetCurve::applyOffset( double offset, Qt::KeyboardModifiers mo
   else
   {
     destLayer->destroyEditCommand();
-    emit messageEmitted( QStringLiteral( "Could not apply offset" ), Qgis::MessageLevel::Critical );
+    emit messageEmitted( u"Could not apply offset"_s, Qgis::MessageLevel::Critical );
   }
 
   deleteRubberBandAndGeometry();
@@ -422,7 +446,7 @@ double QgsMapToolOffsetCurve::calculateOffset( const QgsPointXY &mapPoint )
     int leftOf = 0;
 
     offset = std::sqrt( mManipulatedGeometry.closestSegmentWithContext( layerCoords, minDistPoint, beforeVertex, &leftOf ) );
-    if ( QgsWkbTypes::geometryType( mManipulatedGeometry.wkbType() ) == QgsWkbTypes::LineGeometry )
+    if ( QgsWkbTypes::geometryType( mManipulatedGeometry.wkbType() ) == Qgis::GeometryType::Line )
     {
       offset = leftOf < 0 ? offset : -offset;
     }
@@ -445,8 +469,7 @@ void QgsMapToolOffsetCurve::canvasMoveEvent( QgsMapMouseEvent *e )
     }
     else
     {
-      match = mCanvas->snappingUtils()->snapToCurrentLayer( e->pos(),
-              QgsPointLocator::Types( QgsPointLocator::Edge | QgsPointLocator::Area ) );
+      match = mCanvas->snappingUtils()->snapToCurrentLayer( e->pos(), QgsPointLocator::Types( QgsPointLocator::Edge | QgsPointLocator::Area ) );
     }
     mSnapIndicator->setMatch( match );
     return;
@@ -493,8 +516,8 @@ void QgsMapToolOffsetCurve::prepareGeometry( const QgsPointLocator::Match &match
   }
   mOriginalGeometry = geom;
 
-  const QgsWkbTypes::Type geomType = geom.wkbType();
-  if ( QgsWkbTypes::geometryType( geomType ) == QgsWkbTypes::LineGeometry )
+  const Qgis::WkbType geomType = geom.wkbType();
+  if ( QgsWkbTypes::geometryType( geomType ) == Qgis::GeometryType::Line )
   {
     if ( !geom.isMultipart() )
     {
@@ -511,7 +534,7 @@ void QgsMapToolOffsetCurve::prepareGeometry( const QgsPointLocator::Match &match
       mManipulatedGeometry = QgsGeometry::fromPolylineXY( multiLine.at( mModifiedPart ) );
     }
   }
-  else if ( QgsWkbTypes::geometryType( geomType ) == QgsWkbTypes::PolygonGeometry )
+  else if ( QgsWkbTypes::geometryType( geomType ) == Qgis::GeometryType::Polygon )
   {
     if ( !match.hasEdge() && !match.hasVertex() && match.hasArea() )
     {
@@ -556,7 +579,6 @@ void QgsMapToolOffsetCurve::prepareGeometry( const QgsPointLocator::Match &match
         {
           mManipulatedGeometry = QgsGeometry::fromPolygonXY( poly );
         }
-
       }
       else
       {
@@ -583,7 +605,7 @@ void QgsMapToolOffsetCurve::createUserInputWidget()
   deleteUserInputWidget();
 
   mUserInputWidget = new QgsOffsetUserWidget();
-  mUserInputWidget->setPolygonMode( QgsWkbTypes::geometryType( mOriginalGeometry.wkbType() ) != QgsWkbTypes::LineGeometry );
+  mUserInputWidget->setPolygonMode( QgsWkbTypes::geometryType( mOriginalGeometry.wkbType() ) != Qgis::GeometryType::Line );
   QgisApp::instance()->addUserInputWidget( mUserInputWidget );
   mUserInputWidget->setFocus( Qt::TabFocusReason );
 
@@ -591,7 +613,7 @@ void QgsMapToolOffsetCurve::createUserInputWidget()
   connect( mUserInputWidget, &QgsOffsetUserWidget::offsetEditingFinished, this, &QgsMapToolOffsetCurve::applyOffsetFromWidget );
   connect( mUserInputWidget, &QgsOffsetUserWidget::offsetEditingCanceled, this, &QgsMapToolOffsetCurve::cancel );
 
-  connect( mUserInputWidget, &QgsOffsetUserWidget::offsetConfigChanged, this, [ = ] {updateGeometryAndRubberBand( mUserInputWidget->offset() );} );
+  connect( mUserInputWidget, &QgsOffsetUserWidget::offsetConfigChanged, this, [this] { updateGeometryAndRubberBand( mUserInputWidget->offset() ); } );
 }
 
 void QgsMapToolOffsetCurve::deleteUserInputWidget()
@@ -628,13 +650,13 @@ void QgsMapToolOffsetCurve::updateGeometryAndRubberBand( double offset )
   }
 
   QgsGeometry offsetGeom;
-  const Qgis::JoinStyle joinStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle.value();
-  const int quadSegments = QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg.value();
-  const double miterLimit = QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit.value();
-  const Qgis::EndCapStyle capStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle.value();
+  const Qgis::JoinStyle joinStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle->value();
+  const int quadSegments = QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg->value();
+  const double miterLimit = QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit->value();
+  const Qgis::EndCapStyle capStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle->value();
 
 
-  if ( QgsWkbTypes::geometryType( mOriginalGeometry.wkbType() ) == QgsWkbTypes::LineGeometry )
+  if ( QgsWkbTypes::geometryType( mOriginalGeometry.wkbType() ) == Qgis::GeometryType::Line )
   {
     offsetGeom = mManipulatedGeometry.offsetCurve( offset, quadSegments, joinStyle, miterLimit );
   }
@@ -672,39 +694,51 @@ QgsOffsetUserWidget::QgsOffsetUserWidget( QWidget *parent )
   mOffsetSpinBox->setClearValue( 0.0 );
 
   // fill comboboxes
-  mJoinStyleComboBox->addItem( tr( "Round" ), static_cast< int >( Qgis::JoinStyle::Round ) );
-  mJoinStyleComboBox->addItem( tr( "Miter" ), static_cast< int >( Qgis::JoinStyle::Miter ) );
-  mJoinStyleComboBox->addItem( tr( "Bevel" ), static_cast< int >( Qgis::JoinStyle::Bevel ) );
-  mCapStyleComboBox->addItem( tr( "Round" ), static_cast< int >( Qgis::EndCapStyle::Round ) );
-  mCapStyleComboBox->addItem( tr( "Flat" ), static_cast< int >( Qgis::EndCapStyle::Flat ) );
-  mCapStyleComboBox->addItem( tr( "Square" ), static_cast< int >( Qgis::EndCapStyle::Square ) );
+  mJoinStyleComboBox->addItem( tr( "Round" ), static_cast<int>( Qgis::JoinStyle::Round ) );
+  mJoinStyleComboBox->addItem( tr( "Miter" ), static_cast<int>( Qgis::JoinStyle::Miter ) );
+  mJoinStyleComboBox->addItem( tr( "Bevel" ), static_cast<int>( Qgis::JoinStyle::Bevel ) );
+  mCapStyleComboBox->addItem( tr( "Round" ), static_cast<int>( Qgis::EndCapStyle::Round ) );
+  mCapStyleComboBox->addItem( tr( "Flat" ), static_cast<int>( Qgis::EndCapStyle::Flat ) );
+  mCapStyleComboBox->addItem( tr( "Square" ), static_cast<int>( Qgis::EndCapStyle::Square ) );
 
-  const Qgis::JoinStyle joinStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle.value();
-  const int quadSegments = QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg.value();
-  const double miterLimit = QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit.value();
-  const Qgis::EndCapStyle capStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle.value();
+  const Qgis::JoinStyle joinStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle->value();
+  const int quadSegments = QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg->value();
+  const double miterLimit = QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit->value();
+  const Qgis::EndCapStyle capStyle = QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle->value();
 
-  mJoinStyleComboBox->setCurrentIndex( mJoinStyleComboBox->findData( static_cast< int >( joinStyle ) ) );
+  mJoinStyleComboBox->setCurrentIndex( mJoinStyleComboBox->findData( static_cast<int>( joinStyle ) ) );
   mQuadrantSpinBox->setValue( quadSegments );
   mQuadrantSpinBox->setClearValue( 8 );
   mMiterLimitSpinBox->setValue( miterLimit );
   mMiterLimitSpinBox->setClearValue( 5.0 );
-  mCapStyleComboBox->setCurrentIndex( mCapStyleComboBox->findData( static_cast< int >( capStyle ) ) );
+  mCapStyleComboBox->setCurrentIndex( mCapStyleComboBox->findData( static_cast<int>( capStyle ) ) );
 
   // connect signals
   mOffsetSpinBox->installEventFilter( this );
-  connect( mOffsetSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsOffsetUserWidget::offsetChanged );
+  connect( mOffsetSpinBox, static_cast<void ( QDoubleSpinBox::* )( double )>( &QDoubleSpinBox::valueChanged ), this, &QgsOffsetUserWidget::offsetChanged );
 
-  connect( mJoinStyleComboBox, static_cast < void ( QComboBox::* )( int ) > ( &QComboBox::currentIndexChanged ), this, [ = ] { QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle.setValue( static_cast< Qgis::JoinStyle >( mJoinStyleComboBox->currentData().toInt() ) ); emit offsetConfigChanged(); } );
-  connect( mQuadrantSpinBox, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, [ = ]( const int quadSegments ) { QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg.setValue( quadSegments ); emit offsetConfigChanged(); } );
-  connect( mMiterLimitSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, [ = ]( double miterLimit ) { QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit.setValue( miterLimit ); emit offsetConfigChanged(); } );
-  connect( mCapStyleComboBox, static_cast < void ( QComboBox::* )( int ) > ( &QComboBox::currentIndexChanged ), this, [ = ] { QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle.setValue( static_cast< Qgis::EndCapStyle >( mCapStyleComboBox->currentData().toInt() ) ); emit offsetConfigChanged(); } );
+  connect( mJoinStyleComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, [this] {
+    QgsSettingsRegistryCore::settingsDigitizingOffsetJoinStyle->setValue( static_cast< Qgis::JoinStyle >( mJoinStyleComboBox->currentData().toInt() ) );
+    emit offsetConfigChanged();
+  } );
+  connect( mQuadrantSpinBox, static_cast<void ( QSpinBox::* )( int )>( &QSpinBox::valueChanged ), this, [this]( const int quadSegments ) {
+    QgsSettingsRegistryCore::settingsDigitizingOffsetQuadSeg->setValue( quadSegments );
+    emit offsetConfigChanged();
+  } );
+  connect( mMiterLimitSpinBox, static_cast<void ( QDoubleSpinBox::* )( double )>( &QDoubleSpinBox::valueChanged ), this, [this]( double miterLimit ) {
+    QgsSettingsRegistryCore::settingsDigitizingOffsetMiterLimit->setValue( miterLimit );
+    emit offsetConfigChanged();
+  } );
+  connect( mCapStyleComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, [this] {
+    QgsSettingsRegistryCore::settingsDigitizingOffsetCapStyle->setValue( static_cast< Qgis::EndCapStyle >( mCapStyleComboBox->currentData().toInt() ) );
+    emit offsetConfigChanged();
+  } );
 
-  const bool showAdvanced = QgsSettingsRegistryCore::settingsDigitizingOffsetShowAdvanced.value();
+  const bool showAdvanced = QgsSettingsRegistryCore::settingsDigitizingOffsetShowAdvanced->value();
   mShowAdvancedButton->setChecked( showAdvanced );
   mAdvancedConfigWidget->setVisible( showAdvanced );
   connect( mShowAdvancedButton, &QToolButton::clicked, mAdvancedConfigWidget, &QWidget::setVisible );
-  connect( mShowAdvancedButton, &QToolButton::clicked, this, [ = ]( const bool clicked ) {QgsSettingsRegistryCore::settingsDigitizingConvertToCurveDistanceTolerance.setValue( clicked );} );
+  connect( mShowAdvancedButton, &QToolButton::clicked, this, []( const bool clicked ) { QgsSettingsRegistryCore::settingsDigitizingConvertToCurveDistanceTolerance->setValue( clicked ); } );
 
   // config focus
   setFocusProxy( mOffsetSpinBox );

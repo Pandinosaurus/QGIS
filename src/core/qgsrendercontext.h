@@ -18,23 +18,27 @@
 #ifndef QGSRENDERCONTEXT_H
 #define QGSRENDERCONTEXT_H
 
-#include "qgis_core.h"
-#include "qgis_sip.h"
-#include <QColor>
-#include <QPainter>
 #include <memory>
 
+#include "qgis_core.h"
+#include "qgis_sip.h"
 #include "qgscoordinatetransform.h"
+#include "qgscoordinatetransformcontext.h"
+#include "qgsdistancearea.h"
 #include "qgsexpressioncontext.h"
 #include "qgsfeaturefilterprovider.h"
+#include "qgslabelsink.h"
 #include "qgsmaptopixel.h"
 #include "qgsmapunitscale.h"
-#include "qgsrectangle.h"
-#include "qgsvectorsimplifymethod.h"
-#include "qgsdistancearea.h"
-#include "qgscoordinatetransformcontext.h"
+#include "qgsmaskrendersettings.h"
 #include "qgspathresolver.h"
+#include "qgsrectangle.h"
 #include "qgstemporalrangeobject.h"
+#include "qgsvectorsimplifymethod.h"
+
+#include <QColor>
+#include <QPainter>
+#include <QPainterPath>
 
 class QPainter;
 class QgsAbstractGeometry;
@@ -44,6 +48,7 @@ class QgsRenderedFeatureHandlerInterface;
 class QgsSymbolLayer;
 class QgsMaskIdProvider;
 class QgsMapClippingRegion;
+class QgsElevationMap;
 
 
 /**
@@ -61,35 +66,32 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     ~QgsRenderContext() override;
 
     QgsRenderContext( const QgsRenderContext &rh );
+    SIP_SKIP QgsRenderContext( QgsRenderContext &&rh );
     QgsRenderContext &operator=( const QgsRenderContext &rh );
+    QgsRenderContext &operator=( QgsRenderContext &&rh );
 
     /**
      * Set combination of flags that will be used for rendering.
-     * \since QGIS 2.14
      */
     void setFlags( Qgis::RenderContextFlags flags );
 
     /**
      * Enable or disable a particular flag (other flags are not affected)
-     * \since QGIS 2.14
      */
     void setFlag( Qgis::RenderContextFlag flag, bool on = true );
 
     /**
      * Returns combination of flags used for rendering.
-     * \since QGIS 2.14
      */
     Qgis::RenderContextFlags flags() const;
 
     /**
      * Check whether a particular flag is enabled.
-     * \since QGIS 2.14
      */
     bool testFlag( Qgis::RenderContextFlag flag ) const;
 
     /**
      * create initialized QgsRenderContext instance from given QgsMapSettings
-     * \since QGIS 2.4
      */
     static QgsRenderContext fromMapSettings( const QgsMapSettings &mapSettings );
 
@@ -97,7 +99,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Creates a default render context given a pixel based QPainter destination.
      * If no painter is specified or the painter has no device, then a default
      * DPI of 88 will be assumed.
-     * \since QGIS 3.0
      */
     static QgsRenderContext fromQPainter( QPainter *painter );
 
@@ -107,7 +108,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Returns the destination QPainter for the render operation.
      * \see setPainter()
     */
-    QPainter *painter() {return mPainter;}
+    QPainter *painter() { return mPainter; }
 
 #ifndef SIP_RUN
 
@@ -117,6 +118,29 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     * \since QGIS 3.12
     */
     const QPainter *painter() const { return mPainter; }
+#endif
+
+    /**
+     * Returns the const destination QPainter for temporary in-progress preview renders.
+     *
+     * May be NULLPTR if temporary in-progress preview renders are not required.
+     *
+     * \see setPreviewRenderPainter()
+     * \since QGIS 3.34
+    */
+    QPainter *previewRenderPainter() { return mPreviewRenderPainter; }
+
+#ifndef SIP_RUN
+
+    /**
+     * Returns the const destination QPainter for temporary in-progress preview renders.
+     *
+     * May be NULLPTR if temporary in-progress preview renders are not required.
+     *
+     * \see setPreviewRenderPainter()
+     * \since QGIS 3.34
+    */
+    const QPainter *previewRenderPainter() const { return mPreviewRenderPainter; }
 #endif
 
     /**
@@ -141,6 +165,31 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      */
     QPainter *maskPainter( int id = 0 ) { return mMaskPainter.value( id, nullptr ); }
 
+    // TODO QGIS 5 : remove the V2 from method name
+
+    /**
+     * When rendering a map layer in a second pass (for selective masking),
+     * some symbol layers may be disabled.
+     *
+     * Sets the list of disabled symbol layers.
+     * \see disabledSymbolLayers()
+     * \see isSymbolLayerEnabled()
+     * \since QGIS 3.12
+     * \deprecated QGIS 3.30. And replaced with setDisabledSymbolLayersV2.
+     */
+    Q_DECL_DEPRECATED void setDisabledSymbolLayers( const QSet<const QgsSymbolLayer *> &symbolLayers ) SIP_DEPRECATED;
+
+    /**
+     * When rendering a map layer in a second pass (for selective masking),
+     * some symbol layers may be disabled.
+     *
+     * Sets the list of disabled symbol layer ids.
+     * \see disabledSymbolLayersV2()
+     * \see isSymbolLayerEnabled()
+     * \since QGIS 3.30
+     */
+    void setDisabledSymbolLayersV2( const QSet<QString> &symbolLayers );
+
     /**
      * When rendering a map layer in a second pass (for selective masking),
      * some symbol layers may be disabled.
@@ -149,8 +198,20 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setDisabledSymbolLayers()
      * \see isSymbolLayerEnabled()
      * \since QGIS 3.12
+     * \deprecated QGIS 3.30. And replaced with disabledSymbolLayersV2.
      */
-    QSet<const QgsSymbolLayer *> disabledSymbolLayers() const { return mDisabledSymbolLayers; }
+    Q_DECL_DEPRECATED QSet<const QgsSymbolLayer *> disabledSymbolLayers() const SIP_DEPRECATED;
+
+    /**
+     * When rendering a map layer in a second pass (for selective masking),
+     * some symbol layers may be disabled.
+     *
+     * Returns the list of disabled symbol layer ids.
+     * \see setDisabledSymbolLayers()
+     * \see isSymbolLayerEnabled()
+     * \since QGIS 3.30
+     */
+    QSet<QString> disabledSymbolLayersV2() const;
 
     /**
      * When rendering a map layer in a second pass (for selective masking),
@@ -161,7 +222,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see disabledSymbolLayers()
      * \since QGIS 3.12
      */
-    bool isSymbolLayerEnabled( const QgsSymbolLayer *layer ) const { return ! mDisabledSymbolLayers.contains( layer ); }
+    bool isSymbolLayerEnabled( const QgsSymbolLayer *layer ) const;
 
     /**
      * Returns the current coordinate transform for the context.
@@ -173,11 +234,10 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      *
      * \see setCoordinateTransform()
      */
-    QgsCoordinateTransform coordinateTransform() const {return mCoordTransform;}
+    QgsCoordinateTransform coordinateTransform() const { return mCoordTransform; }
 
     /**
      * A general purpose distance and area calculator, capable of performing ellipsoid based calculations.
-     * \since QGIS 3.0
      */
     const QgsDistanceArea &distanceArea() const { return mDistanceArea; }
 
@@ -187,7 +247,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * from a source to destination coordinate reference system.
      *
      * \see setTransformContext()
-     * \since QGIS 3.0
      */
     QgsCoordinateTransformContext transformContext() const;
 
@@ -197,7 +256,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * from a source to destination coordinate reference system.
      *
      * \see transformContext()
-     * \since QGIS 3.0
      */
     void setTransformContext( const QgsCoordinateTransformContext &context );
 
@@ -206,7 +264,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * during rendering operations, e.g. for resolving relative symbol paths.
      *
      * \see setPathResolver()
-     * \since QGIS 3.0
      */
     const QgsPathResolver &pathResolver() const { return mPathResolver; }
 
@@ -215,7 +272,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * during rendering operations, e.g. for resolving relative symbol paths.
      *
      * \see pathResolver()
-     * \since QGIS 3.0
      */
     void setPathResolver( const QgsPathResolver &resolver ) { mPathResolver = resolver; }
 
@@ -253,7 +309,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      *
      * \see setMapToPixel()
      */
-    const QgsMapToPixel &mapToPixel() const {return mMapToPixel;}
+    const QgsMapToPixel &mapToPixel() const { return mMapToPixel; }
 
     /**
      * Returns the scaling factor for the render to convert painter units
@@ -261,7 +317,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * per millimeter.
      * \see setScaleFactor()
      */
-    double scaleFactor() const {return mScaleFactor;}
+    double scaleFactor() const { return mScaleFactor; }
 
     /**
      * Returns the targeted DPI for rendering.
@@ -269,7 +325,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setDpiTarget()
      * \since QGIS 3.20
      */
-    double dpiTarget() const {return mDpiTarget;}
+    double dpiTarget() const { return mDpiTarget; }
 
     /**
      * Returns TRUE if the rendering operation has been stopped and any ongoing
@@ -280,7 +336,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setRenderingStopped()
      * \see feedback()
      */
-    bool renderingStopped() const {return mRenderingStopped;}
+    bool renderingStopped() const { return mRenderingStopped; }
 
     /**
      * Attach a \a feedback object that can be queried regularly during rendering to check
@@ -310,22 +366,25 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * of any faster raster shortcuts.
      *
      * \see setForceVectorOutput()
+     * \deprecated QGIS 3.44. Use rasterizedRenderingPolicy() instead.
      */
-    bool forceVectorOutput() const;
+    Q_DECL_DEPRECATED bool forceVectorOutput() const SIP_DEPRECATED;
 
     /**
      * Returns TRUE if advanced effects such as blend modes such be used
      *
      * \see setUseAdvancedEffects()
+     * \deprecated QGIS 3.44. Use rasterizedRenderingPolicy() instead.
      */
-    bool useAdvancedEffects() const;
+    Q_DECL_DEPRECATED bool useAdvancedEffects() const SIP_DEPRECATED;
 
     /**
      * Used to enable or disable advanced effects such as blend modes
      *
      * \see useAdvancedEffects()
+     * \deprecated QGIS 3.44. Use setRasterizedRenderingPolicy() instead.
      */
-    void setUseAdvancedEffects( bool enabled );
+    Q_DECL_DEPRECATED void setUseAdvancedEffects( bool enabled ) SIP_DEPRECATED;
 
     /**
      * Returns TRUE if edit markers should be drawn during the render operation.
@@ -339,7 +398,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * for the rendered map, eg 1000.0 for a 1:1000 map render.
      * \see setRendererScale()
      */
-    double rendererScale() const {return mRendererScale;}
+    double rendererScale() const { return mRendererScale; }
 
 
     /**
@@ -360,10 +419,17 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     double symbologyReferenceScale() const { return mSymbologyReferenceScale; }
 
     /**
-     * Gets access to new labeling engine (may be NULLPTR)
-     * \note not available in Python bindings
+     * Gets access to new labeling engine (may be NULLPTR).
+     * \note Not available in Python bindings.
      */
-    QgsLabelingEngine *labelingEngine() const { return mLabelingEngine; } SIP_SKIP
+    QgsLabelingEngine *labelingEngine() const SIP_SKIP { return mLabelingEngine; }
+
+    /**
+     * Returns the associated label sink, or NULLPTR if not set.
+     * \note Not available in Python bindings.
+     * \since QGIS 3.24
+     */
+    QgsLabelSink *labelSink() const SIP_SKIP { return mLabelSink; }
 
     /**
      * Returns the color to use when rendering selected features.
@@ -400,7 +466,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      *
      * \see mapToPixel()
      */
-    void setMapToPixel( const QgsMapToPixel &mtp ) {mMapToPixel = mtp;}
+    void setMapToPixel( const QgsMapToPixel &mtp ) { mMapToPixel = mtp; }
 
     /**
      * When rendering a map layer, calling this method sets the "clipping"
@@ -414,7 +480,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setExtent()
      * \see setMapExtent()
      */
-    void setExtent( const QgsRectangle &extent ) {mExtent = extent;}
+    void setExtent( const QgsRectangle &extent ) { mExtent = extent; }
 
     /**
      * Sets the original \a extent of the map being rendered.
@@ -445,14 +511,13 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see feedback()
      * \see setFeedback()
      */
-    void setRenderingStopped( bool stopped ) {mRenderingStopped = stopped;}
+    void setRenderingStopped( bool stopped ) { mRenderingStopped = stopped; }
 
     /**
      * A general purpose distance and area calculator, capable of performing ellipsoid based calculations.
      * Will be used to convert meter distances to active MapUnit values for QgsUnitTypes::RenderMetersInMapUnits
-     * \since QGIS 3.0
      */
-    void setDistanceArea( const QgsDistanceArea &distanceArea ) {mDistanceArea = distanceArea ;}
+    void setDistanceArea( const QgsDistanceArea &distanceArea ) { mDistanceArea = distanceArea; }
 
     /**
      * Sets the scaling factor for the render to convert painter units
@@ -460,7 +525,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * per millimeter.
      * \see scaleFactor()
      */
-    void setScaleFactor( double factor ) {mScaleFactor = factor;}
+    void setScaleFactor( double factor ) { mScaleFactor = factor; }
 
     /**
      * Sets the targeted \a dpi for rendering.
@@ -468,14 +533,14 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see dpiTarget()
      * \since QGIS 3.20
      */
-    void setDpiTarget( double dpi ) {mDpiTarget = dpi;}
+    void setDpiTarget( double dpi ) { mDpiTarget = dpi; }
 
     /**
      * Sets the renderer map scale. This should match the desired scale denominator
      * for the rendered map, eg 1000.0 for a 1:1000 map render.
      * \see rendererScale()
      */
-    void setRendererScale( double scale ) {mRendererScale = scale;}
+    void setRendererScale( double scale ) { mRendererScale = scale; }
 
     /**
      * Sets the symbology reference \a scale.
@@ -500,7 +565,19 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * of any rendering operations.
      * \see painter()
      */
-    void setPainter( QPainter *p ) {mPainter = p;}
+    void setPainter( QPainter *p ) { mPainter = p; }
+
+    /**
+     * Sets the destination \a painter for temporary in-progress preview renders.
+     * Ownership of \a painter is not transferred and the QPainter destination must
+     * stay alive for the duration of any rendering operations.
+     *
+     * \a painter may be NULLPTR if temporary in-progress preview renders are not required.
+     *
+     * \see previewRenderPainter()
+     * \since QGIS 3.34
+    */
+    void setPreviewRenderPainter( QPainter *painter ) { mPreviewRenderPainter = painter; }
 
     /**
      * Sets a mask QPainter for the render operation. Ownership of the painter
@@ -512,29 +589,27 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     void setMaskPainter( QPainter *p, int id = 0 ) { mMaskPainter[id] = p; }
 
     /**
-     * When rendering a map layer in a second pass (for selective masking),
-     * some symbol layers may be disabled.
-     *
-     * Sets the list of disabled symbol layers.
-     * \see disabledSymbolLayers()
-     * \see isSymbolLayerEnabled()
-     * \since QGIS 3.12
-     */
-    void setDisabledSymbolLayers( const QSet<const QgsSymbolLayer *> &symbolLayers ) { mDisabledSymbolLayers = symbolLayers; }
-
-    /**
      * Sets whether rendering operations should use vector operations instead
      * of any faster raster shortcuts.
      *
      * \see forceVectorOutput()
+     * \deprecated QGIS 3.44. Use setRasterizedRenderingPolicy() instead.
      */
-    void setForceVectorOutput( bool force );
+    Q_DECL_DEPRECATED void setForceVectorOutput( bool force ) SIP_DEPRECATED;
 
     /**
-     * Assign new labeling engine
-     * \note not available in Python bindings
+     * Assigns the labeling engine
+     * \note Not available in Python bindings.
      */
-    void setLabelingEngine( QgsLabelingEngine *engine ) { mLabelingEngine = engine; } SIP_SKIP
+    void setLabelingEngine( QgsLabelingEngine *engine ) SIP_SKIP { mLabelingEngine = engine; }
+
+    /**
+     * Assigns the label sink which will take over responsibility for handling labels.
+     * \note Ownership is not transferred and the sink must exist for the lifetime of the map rendering job.
+     * \note Not available in Python bindings.
+     * \since QGIS 3.24
+     */
+    void setLabelSink( QgsLabelSink *sink ) SIP_SKIP { mLabelSink = sink; }
 
     /**
      * Sets the \a color to use when rendering selected features.
@@ -572,9 +647,17 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * The default is to use no simplification.
      *
      * \see setVectorSimplifyMethod()
-     * \since QGIS 2.4
      */
-    const QgsVectorSimplifyMethod &vectorSimplifyMethod() const { return mVectorSimplifyMethod; }
+    QgsVectorSimplifyMethod &vectorSimplifyMethod() { return mVectorSimplifyMethod; }
+
+    /**
+     * Returns the simplification settings to use when rendering vector layers.
+     *
+     * The default is to use no simplification.
+     *
+     * \see setVectorSimplifyMethod()
+     */
+    const QgsVectorSimplifyMethod &vectorSimplifyMethod() const SIP_SKIP { return mVectorSimplifyMethod; }
 
     /**
      * Sets the simplification setting to use when rendering vector layers.
@@ -587,7 +670,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      *
      * \see vectorSimplifyMethod()
      *
-     * \since QGIS 2.4
      */
     void setVectorSimplifyMethod( const QgsVectorSimplifyMethod &simplifyMethod ) { mVectorSimplifyMethod = simplifyMethod; }
 
@@ -595,7 +677,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Sets the expression context. This context is used for all expression evaluation
      * associated with this render context.
      * \see expressionContext()
-     * \since QGIS 2.12
      */
     void setExpressionContext( const QgsExpressionContext &context ) { mExpressionContext = context; }
 
@@ -603,7 +684,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Gets the expression context. This context should be used for all expression evaluation
      * associated with this render context.
      * \see setExpressionContext()
-     * \since QGIS 2.12
      */
     QgsExpressionContext &expressionContext() { return mExpressionContext; }
 
@@ -612,9 +692,8 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * associated with this render context.
      * \see setExpressionContext()
      * \note not available in Python bindings
-     * \since QGIS 2.12
      */
-    const QgsExpressionContext &expressionContext() const { return mExpressionContext; } SIP_SKIP
+    const QgsExpressionContext &expressionContext() const SIP_SKIP { return mExpressionContext; }
 
     //! Returns pointer to the unsegmentized geometry
     const QgsAbstractGeometry *geometry() const { return mGeometry; }
@@ -625,7 +704,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Set a filter feature provider used for additional filtering of rendered features.
      * \param ffp the filter feature provider
      * \see featureFilterProvider()
-     * \since QGIS 2.14
      */
     void setFeatureFilterProvider( const QgsFeatureFilterProvider *ffp );
 
@@ -633,7 +711,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Gets the filter feature provider used for additional filtering of rendered features.
      * \returns the filter feature provider
      * \see setFeatureFilterProvider()
-     * \since QGIS 2.14
      */
     const QgsFeatureFilterProvider *featureFilterProvider() const;
 
@@ -675,31 +752,38 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * is used in some contexts to refine the converted size. For example, a Qgis::RenderSubcomponentProperty::BlurSize
      * property will be limited to a suitably fast range when the render context has the Qgis::RenderContextFlag::RenderSymbolPreview set.
      *
+     * \see convertFromPainterUnits()
      * \see convertToMapUnits()
-     * \since QGIS 3.0
      */
-    double convertToPainterUnits( double size, QgsUnitTypes::RenderUnit unit, const QgsMapUnitScale &scale = QgsMapUnitScale(), Qgis::RenderSubcomponentProperty property = Qgis::RenderSubcomponentProperty::Generic ) const;
+    double convertToPainterUnits(
+      double size, Qgis::RenderUnit unit, const QgsMapUnitScale &scale = QgsMapUnitScale(), Qgis::RenderSubcomponentProperty property = Qgis::RenderSubcomponentProperty::Generic
+    ) const;
+
+    /**
+     * Converts a size from painter units (pixels) to the specified render unit.
+     *
+     * \see convertToPainterUnits()
+     * \see convertToMapUnits()
+     * \since QGIS 3.40
+     */
+    double convertFromPainterUnits( double size, Qgis::RenderUnit unit ) const;
 
     /**
      * Converts a size from the specified units to map units. The conversion respects the limits
      * specified by the optional scale parameter.
      * \see convertToPainterUnits()
-     * \since QGIS 3.0
      */
-    double convertToMapUnits( double size, QgsUnitTypes::RenderUnit unit, const QgsMapUnitScale &scale = QgsMapUnitScale() ) const;
+    double convertToMapUnits( double size, Qgis::RenderUnit unit, const QgsMapUnitScale &scale = QgsMapUnitScale() ) const;
 
     /**
      * Converts a size from map units to the specified units.
      * \see convertToMapUnits()
-     * \since QGIS 3.0
      */
-    double convertFromMapUnits( double sizeInMapUnits, QgsUnitTypes::RenderUnit outputUnit ) const;
+    double convertFromMapUnits( double sizeInMapUnits, Qgis::RenderUnit outputUnit ) const;
 
     /**
      * Convert meter distances to active MapUnit values for QgsUnitTypes::RenderMetersInMapUnits
-     * \note
-      * When the sourceCrs() is geographic, the center of the Extent will be used
-     * \since QGIS 3.0
+     * \note When the sourceCrs() is geographic, the center of the Extent will be used
      */
     double convertMetersToMapUnits( double meters ) const;
 
@@ -709,10 +793,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setTextRenderFormat()
      * \since QGIS 3.4.3
      */
-    Qgis::TextRenderFormat textRenderFormat() const
-    {
-      return mTextRenderFormat;
-    }
+    Qgis::TextRenderFormat textRenderFormat() const { return mTextRenderFormat; }
 
     /**
      * Sets the text render \a format, which dictates how text is rendered (e.g. as paths or real text objects).
@@ -720,10 +801,7 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see textRenderFormat()
      * \since QGIS 3.4.3
      */
-    void setTextRenderFormat( Qgis::TextRenderFormat format )
-    {
-      mTextRenderFormat = format;
-    }
+    void setTextRenderFormat( Qgis::TextRenderFormat format ) { mTextRenderFormat = format; }
 
     /**
      * Returns the list of rendered feature handlers to use while rendering map layers.
@@ -798,26 +876,54 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * Gets custom rendering flags. Layers might honour these to alter their rendering.
      * \returns a map of custom flags
      * \see setCustomRenderingFlag()
-     * \since QGIS 3.12
+     * \deprecated QGIS 3.40. Use customProperties() instead.
      */
-    QVariantMap customRenderingFlags() const { return mCustomRenderingFlags; }
+    Q_DECL_DEPRECATED QVariantMap customRenderingFlags() const SIP_DEPRECATED { return mCustomProperties; }
+
+    /**
+     * Returns custom rendering properties.
+     *
+     * Objects might honour these to alter their rendering.
+     *
+     * \see setCustomProperty()
+     * \since QGIS 3.40
+     */
+    QVariantMap customProperties() const { return mCustomProperties; }
 
     /**
      * Sets a custom rendering flag. Layers might honour these to alter their rendering.
      * \param flag the flag name
      * \param value the flag value
      * \see customRenderingFlags()
-     * \since QGIS 3.12
+     * \deprecated QGIS 3.40. Use setCustomProperty() instead.
      */
-    void setCustomRenderingFlag( const QString &flag, const QVariant &value ) { mCustomRenderingFlags[flag] = value; }
+    Q_DECL_DEPRECATED void setCustomRenderingFlag( const QString &flag, const QVariant &value ) SIP_DEPRECATED { mCustomProperties[flag] = value; }
+
+    /**
+     * Sets a custom rendering property.
+     *
+     * Objects might honour these to alter their rendering.
+     *
+     * \see customProperties()
+     * \since QGIS 3.40
+     */
+    void setCustomProperty( const QString &property, const QVariant &value ) { mCustomProperties[property] = value; }
 
     /**
      * Clears the specified custom rendering flag.
      * \param flag the flag name
      * \see setCustomRenderingFlag()
-     * \since QGIS 3.12
+     * \deprecated QGIS 3.40. Use clearCustomProperty() instead.
      */
-    void clearCustomRenderingFlag( const QString &flag ) { mCustomRenderingFlags.remove( flag ); }
+    Q_DECL_DEPRECATED void clearCustomRenderingFlag( const QString &flag ) SIP_DEPRECATED { mCustomProperties.remove( flag ); }
+
+    /**
+     * Clears the specified custom rendering property.
+     *
+     * \see setCustomProperty()
+     * \since QGIS 3.40
+     */
+    void clearCustomProperty( const QString &property ) { mCustomProperties.remove( property ); }
 
     /**
      * Returns the list of clipping regions to apply during the render.
@@ -872,6 +978,74 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \since QGIS 3.16
      */
     void setTextureOrigin( const QPointF &origin );
+
+    /**
+     * Returns a reference to the mask render settings, which control how masks
+     * are drawn and behave during render operations.
+     *
+     * \see setMaskSettings()
+     * \since QGIS 3.38
+     */
+    const QgsMaskRenderSettings &maskSettings() const SIP_SKIP { return mMaskRenderSettings; }
+
+    /**
+     * Returns a reference to the mask render settings, which control how masks
+     * are drawn and behave during render operations.
+     *
+     * \see setMaskSettings()
+     * \since QGIS 3.38
+     */
+    QgsMaskRenderSettings &maskSettings() { return mMaskRenderSettings; }
+
+    /**
+     * Sets the mask render \a settings, which control how masks
+     * are drawn and behave during render operations.
+     *
+     * \see maskSettings()
+     * \since QGIS 3.38
+     */
+    void setMaskSettings( const QgsMaskRenderSettings &settings );
+
+    /**
+     * Add a clip \a path to be applied to the \a symbolLayer before rendering
+     * \see addSymbolLayerClipGeometry()
+     *
+     * \deprecated QGIS 3.38. Use addSymbolLayerClipGeometry() instead.
+     */
+    Q_DECL_DEPRECATED void addSymbolLayerClipPath( const QString &symbolLayerId, QPainterPath path ) SIP_DEPRECATED;
+
+    /**
+     * Returns clip paths to be applied to the \a symbolLayer before rendering
+     *
+     *\see symbolLayerClipGeometries()
+     * \deprecated QGIS 3.38. Use symbolLayerClipGeometries() instead.
+     */
+    Q_DECL_DEPRECATED QList<QPainterPath> symbolLayerClipPaths( const QString &symbolLayerId ) const SIP_DEPRECATED;
+
+    /**
+     * Add a clip \a geometry to be applied to the \a symbolLayer before rendering.
+     *
+     * \see symbolLayerClipGeometries()
+     * \since QGIS 3.38
+     */
+    void addSymbolLayerClipGeometry( const QString &symbolLayerId, const QgsGeometry &geometry );
+
+    /**
+     * Returns TRUE if the symbol layer with matching ID has any associated clip geometries.
+     *
+     * \see symbolLayerClipGeometries()
+     * \since QGIS 3.38
+     */
+    bool symbolLayerHasClipGeometries( const QString &symbolLayerId ) const;
+
+    /**
+     * Returns clipping geometries to be applied to the \a symbolLayer before rendering
+     *
+     * \see symbolLayerHasClipGeometries()
+     * \see addSymbolLayerClipGeometry()
+     * \since QGIS 3.38
+     */
+    QVector<QgsGeometry> symbolLayerClipGeometries( const QString &symbolLayerId ) const;
 
     /**
      * Returns the range of z-values which should be rendered.
@@ -958,12 +1132,111 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      */
     QImage::Format imageFormat() const { return mImageFormat; }
 
+    /**
+     * Returns the policy controlling when rasterisation of content during renders is permitted.
+     *
+     * \see setRasterizedRenderingPolicy()
+     * \since QGIS 3.44
+     */
+    Qgis::RasterizedRenderingPolicy rasterizedRenderingPolicy() const;
+
+    /**
+     * Sets the \a policy controlling when rasterisation of content during renders is permitted.
+     *
+     * \see rasterizedRenderingPolicy()
+     * \since QGIS 3.44
+     */
+    void setRasterizedRenderingPolicy( Qgis::RasterizedRenderingPolicy policy );
+
+    /**
+    * Returns the renderer usage
+    *
+    * \see setRendererUsage()
+    * \since QGIS 3.24
+    */
+    Qgis::RendererUsage rendererUsage() const { return mRendererUsage; }
+
+    /**
+    * Sets the renderer usage
+    *
+    * \note This usage not alter how the map gets rendered but the intention is that data provider
+    * knows the context of rendering and may report that to the backend.
+    *
+    * \see rendererUsage()
+    * \since QGIS 3.24
+    */
+    void setRendererUsage( Qgis::RendererUsage usage ) { mRendererUsage = usage; }
+
+    /**
+     * Returns the frame rate of the map, for maps which are part of an animation.
+     *
+     * Returns -1 if the map is not associated with an animation.
+     *
+     * \see setFrameRate()
+     * \since QGIS 3.26
+     */
+    double frameRate() const;
+
+    /**
+     * Sets the frame \a rate of the map (in frames per second), for maps which are part of an animation.
+     *
+     * Defaults to -1 if the map is not associated with an animation.
+     *
+     * \see frameRate()
+     * \since QGIS 3.26
+     */
+    void setFrameRate( double rate );
+
+    /**
+     * Returns the current frame number of the map (in frames per second), for maps which are part of an animation.
+     *
+     * Returns -1 if the map is not associated with an animation.
+     *
+     * \see setCurrentFrame()
+     * \since QGIS 3.26
+     */
+    long long currentFrame() const;
+
+    /**
+     * Sets the current \a frame of the map, for maps which are part of an animation.
+     *
+     * Defaults to -1 if the map is not associated with an animation.
+     *
+     * \see currentFrame()
+     * \since QGIS 3.26
+     */
+    void setCurrentFrame( long long frame );
+
+
+    /**
+     * Returns the destination elevation map for the render operation.
+     *
+     * \see setElevationMap()
+     * \since QGIS 3.30
+     */
+    QgsElevationMap *elevationMap() const;
+
+    /**
+     * Sets the destination elevation \a map for the render operation. Ownership of the elevation map
+     * is not transferred and the QgsElevationMap destination must stay alive for the duration
+     * of any rendering operations.
+     *
+     * \see elevationMap()
+     * \since QGIS 3.30
+     */
+    void setElevationMap( QgsElevationMap *map );
+
   private:
+    void matchRasterizedRenderingPolicyToFlags();
 
     Qgis::RenderContextFlags mFlags;
+    Qgis::RasterizedRenderingPolicy mRasterizedRenderingPolicy = Qgis::RasterizedRenderingPolicy::Default;
 
     //! Painter for rendering operations
     QPainter *mPainter = nullptr;
+
+    //! Painter for in-progress rendering operations
+    QPainter *mPreviewRenderPainter = nullptr;
 
     /**
      * Mask painters for selective masking.
@@ -998,7 +1271,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     /**
      * A general purpose distance and area calculator, capable of performing ellipsoid based calculations.
      * Will be used to convert meter distances to active MapUnit values for QgsUnitTypes::RenderMetersInMapUnits
-     * \since QGIS 3.0
      */
     QgsDistanceArea mDistanceArea;
 
@@ -1024,8 +1296,11 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
 
     double mSymbologyReferenceScale = -1;
 
-    //! Newer labeling engine implementation (can be NULLPTR)
+    //! Labeling engine implementation (can be NULLPTR)
     QgsLabelingEngine *mLabelingEngine = nullptr;
+
+    //! Label sink (can be NULLPTR)
+    QgsLabelSink *mLabelSink = nullptr;
 
     //! Color used for features that are marked as selected
     QColor mSelectionColor;
@@ -1053,9 +1328,9 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     Qgis::TextRenderFormat mTextRenderFormat = Qgis::TextRenderFormat::AlwaysOutlines;
     QList< QgsRenderedFeatureHandlerInterface * > mRenderedFeatureHandlers;
     bool mHasRenderedFeatureHandlers = false;
-    QVariantMap mCustomRenderingFlags;
+    QVariantMap mCustomProperties;
 
-    QSet<const QgsSymbolLayer *> mDisabledSymbolLayers;
+    QSet<QString> mDisabledSymbolLayers;
 
     QList< QgsMapClippingRegion > mClippingRegions;
     QgsGeometry mFeatureClipGeometry;
@@ -1068,9 +1343,21 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     float mDevicePixelRatio = 1.0;
     QImage::Format mImageFormat = QImage::Format_ARGB32_Premultiplied;
 
+    Qgis::RendererUsage mRendererUsage = Qgis::RendererUsage::Unknown;
+
+    double mFrameRate = -1;
+    long long mCurrentFrame = -1;
+
+    //! Clip geometries to be applied to the symbol layer before rendering
+    QMap< QString, QVector<QgsGeometry> > mSymbolLayerClippingGeometries;
+
+    QgsMaskRenderSettings mMaskRenderSettings;
+
 #ifdef QGISDEBUG
     bool mHasTransformContext = false;
 #endif
+
+    QgsElevationMap *mElevationMap = nullptr;
 };
 
 #ifndef SIP_RUN
@@ -1089,7 +1376,6 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
 class QgsScopedRenderContextPainterSwap
 {
   public:
-
     /**
      * Constructor for QgsScopedRenderContextPainterSwap.
      *
@@ -1118,13 +1404,9 @@ class QgsScopedRenderContextPainterSwap
     /**
      * Returns the destination painter for the context back to the original QPainter object.
      */
-    ~QgsScopedRenderContextPainterSwap()
-    {
-      reset();
-    }
+    ~QgsScopedRenderContextPainterSwap() { reset(); }
 
   private:
-
     QgsRenderContext &mContext;
     QPainter *mPreviousPainter = nullptr;
     bool mReleased = false;
@@ -1145,7 +1427,6 @@ class QgsScopedRenderContextPainterSwap
 class QgsScopedRenderContextScaleToMm
 {
   public:
-
     /**
      * Constructor for QgsScopedRenderContextScaleToMm.
      *
@@ -1170,7 +1451,6 @@ class QgsScopedRenderContextScaleToMm
     }
 
   private:
-
     QgsRenderContext &mContext;
 };
 
@@ -1189,7 +1469,6 @@ class QgsScopedRenderContextScaleToMm
 class QgsScopedRenderContextScaleToPixels
 {
   public:
-
     /**
      * Constructor for QgsScopedRenderContextScaleToPixels.
      *
@@ -1214,48 +1493,7 @@ class QgsScopedRenderContextScaleToPixels
     }
 
   private:
-
     QgsRenderContext &mContext;
-};
-
-
-/**
- * \ingroup core
- *
- * \brief Scoped object for saving and restoring a QPainter object's state.
- *
- * Temporarily saves the QPainter state for the lifetime of the object, before restoring it
- * on destruction.
- *
- * \note Not available in Python bindings
- * \since QGIS 3.16
- */
-class QgsScopedQPainterState
-{
-  public:
-
-    /**
-     * Constructor for QgsScopedQPainterState.
-     *
-     * Saves the specified \a painter state.
-     */
-    QgsScopedQPainterState( QPainter *painter )
-      : mPainter( painter )
-    {
-      mPainter->save();
-    }
-
-    /**
-     * Restores the painter back to its original state.
-     */
-    ~QgsScopedQPainterState()
-    {
-      mPainter->restore();
-    }
-
-  private:
-
-    QPainter *mPainter = nullptr;
 };
 
 
@@ -1272,7 +1510,6 @@ class QgsScopedQPainterState
 class QgsScopedRenderContextReferenceScaleOverride
 {
   public:
-
     /**
      * Constructor for QgsScopedRenderContextReferenceScaleOverride.
      *
@@ -1305,7 +1542,6 @@ class QgsScopedRenderContextReferenceScaleOverride
     }
 
   private:
-
     QgsRenderContext *mContext = nullptr;
     double mOriginalScale = 0;
 };

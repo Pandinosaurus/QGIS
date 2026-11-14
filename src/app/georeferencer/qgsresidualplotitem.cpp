@@ -14,17 +14,31 @@
  ***************************************************************************/
 
 #include "qgsresidualplotitem.h"
-#include "qgsgeorefdatapoint.h"
-#include "qgslayoututils.h"
-#include <QPainter>
+
 #include <cfloat>
 #include <cmath>
 
+#include "qgsgeorefdatapoint.h"
+#include "qgslayoututils.h"
+#include "qgspainting.h"
+
+#include <QPainter>
+#include <QString>
+
+#include "moc_qgsresidualplotitem.cpp"
+
+using namespace Qt::StringLiterals;
+
 QgsResidualPlotItem::QgsResidualPlotItem( QgsLayout *layout )
   : QgsLayoutItem( layout )
-  , mConvertScaleToMapUnits( false )
 {
   setBackgroundEnabled( false );
+}
+
+QgsResidualPlotItem::~QgsResidualPlotItem()
+{
+  qDeleteAll( mGCPList );
+  mGCPList.clear();
 }
 
 QgsLayoutItem::Flags QgsResidualPlotItem::itemFlags() const
@@ -58,7 +72,7 @@ void QgsResidualPlotItem::paint( QPainter *painter, const QStyleOptionGraphicsIt
   QgsGCPList::const_iterator gcpIt = mGCPList.constBegin();
   for ( ; gcpIt != mGCPList.constEnd(); ++gcpIt )
   {
-    const QgsPointXY gcpCoords = ( *gcpIt )->pixelCoords();
+    const QgsPointXY gcpCoords = ( *gcpIt )->sourcePoint();
     const double gcpItemMMX = ( gcpCoords.x() - mExtent.xMinimum() ) / mExtent.width() * widthMM;
     const double gcpItemMMY = ( 1 - ( gcpCoords.y() - mExtent.yMinimum() ) / mExtent.height() ) * heightMM;
 
@@ -86,7 +100,7 @@ void QgsResidualPlotItem::paint( QPainter *painter, const QStyleOptionGraphicsIt
   gcpIt = mGCPList.constBegin();
   for ( ; gcpIt != mGCPList.constEnd(); ++gcpIt )
   {
-    const QgsPointXY gcpCoords = ( *gcpIt )->pixelCoords();
+    const QgsPointXY gcpCoords = ( *gcpIt )->sourcePoint();
     const double gcpItemMMX = ( gcpCoords.x() - mExtent.xMinimum() ) / mExtent.width() * widthMM;
     const double gcpItemMMY = ( 1 - ( gcpCoords.y() - mExtent.yMinimum() ) / mExtent.height() ) * heightMM;
     if ( ( *gcpIt )->isEnabled() )
@@ -106,28 +120,31 @@ void QgsResidualPlotItem::paint( QPainter *painter, const QStyleOptionGraphicsIt
   }
 
   //draw scale bar
-  double initialScaleBarWidth = rect().width() / 5;
+  double initialScaleBarWidth = 0;
   double scaleBarWidthUnits = rect().width() / 5 / minMMPixelRatio;
 
   //a simple method to round to next nice number
   int nDecPlaces;
-  if ( scaleBarWidthUnits < 1 )
+  if ( scaleBarWidthUnits <= 0 )
+  {
+    initialScaleBarWidth = rect().width() / 5;
+  }
+  else if ( scaleBarWidthUnits < 1 )
   {
     nDecPlaces = -std::floor( std::log10( scaleBarWidthUnits ) );
     scaleBarWidthUnits *= std::pow( 10.0, nDecPlaces );
-    scaleBarWidthUnits = ( int )( scaleBarWidthUnits + 0.5 );
+    scaleBarWidthUnits = ( int ) ( scaleBarWidthUnits + 0.5 );
     scaleBarWidthUnits /= std::pow( 10.0, nDecPlaces );
+    initialScaleBarWidth = scaleBarWidthUnits * minMMPixelRatio;
   }
-  else
+  else if ( scaleBarWidthUnits > 0 )
   {
     nDecPlaces = static_cast<int>( std::log10( scaleBarWidthUnits ) );
     scaleBarWidthUnits /= std::pow( 10.0, nDecPlaces );
-    scaleBarWidthUnits = ( int )( scaleBarWidthUnits + 0.5 );
+    scaleBarWidthUnits = ( int ) ( scaleBarWidthUnits + 0.5 );
     scaleBarWidthUnits *= std::pow( 10.0, nDecPlaces );
+    initialScaleBarWidth = scaleBarWidthUnits * minMMPixelRatio;
   }
-  initialScaleBarWidth = scaleBarWidthUnits * minMMPixelRatio;
-
-
 
   painter->setPen( QColor( 0, 0, 0 ) );
   painter->drawLine( QPointF( 5, rect().height() - 5 ), QPointF( 5 + initialScaleBarWidth, rect().height() - 5 ) );
@@ -137,11 +154,11 @@ void QgsResidualPlotItem::paint( QPainter *painter, const QStyleOptionGraphicsIt
   scaleBarFont.setPointSize( 9 );
   if ( mConvertScaleToMapUnits )
   {
-    QgsLayoutUtils::drawText( painter, QPointF( 5, rect().height() - 4 + QgsLayoutUtils::fontAscentMM( scaleBarFont ) ), QStringLiteral( "%1 map units" ).arg( scaleBarWidthUnits ), QFont() );
+    QgsLayoutUtils::drawText( painter, QPointF( 5, rect().height() - 4 + QgsLayoutUtils::fontAscentMM( scaleBarFont ) ), u"%1 map units"_s.arg( scaleBarWidthUnits ), QFont() );
   }
   else
   {
-    QgsLayoutUtils::drawText( painter, QPointF( 5, rect().height() - 4 + QgsLayoutUtils::fontAscentMM( scaleBarFont ) ), QStringLiteral( "%1 pixels" ).arg( scaleBarWidthUnits ), QFont() );
+    QgsLayoutUtils::drawText( painter, QPointF( 5, rect().height() - 4 + QgsLayoutUtils::fontAscentMM( scaleBarFont ) ), u"%1 pixels"_s.arg( scaleBarWidthUnits ), QFont() );
   }
 
   if ( frameEnabled() )
@@ -154,10 +171,19 @@ void QgsResidualPlotItem::paint( QPainter *painter, const QStyleOptionGraphicsIt
   }
 }
 
-void QgsResidualPlotItem::draw( QgsLayoutItemRenderContext & )
+void QgsResidualPlotItem::setGCPList( const QgsGCPList &list )
 {
+  qDeleteAll( mGCPList );
+  mGCPList.clear();
 
+  for ( const QgsGeorefDataPoint *pt : list )
+  {
+    mGCPList.append( new QgsGeorefDataPoint( *pt ) );
+  }
 }
+
+void QgsResidualPlotItem::draw( QgsLayoutItemRenderContext & )
+{}
 
 double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p, double pixelXMM, double pixelYMM )
 {
@@ -167,7 +193,7 @@ double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p
   }
 
   //calculate intersections with upper / lower frame edge depending on the residual y sign
-  double upDownDist = std::numeric_limits<double>::max(); //distance to frame intersection with lower or upper frame
+  double upDownDist = std::numeric_limits<double>::max();    //distance to frame intersection with lower or upper frame
   double leftRightDist = std::numeric_limits<double>::max(); //distance to frame intersection with left or right frame
 
   const QPointF residual = p->residual();
@@ -177,11 +203,7 @@ double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p
   if ( residual.y() > 0 )
   {
     const QLineF lowerFrameLine( 0, rect().height(), rect().width(), rect().height() );
-#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
-    if ( residualLine.intersect( lowerFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#else
     if ( residualLine.intersects( lowerFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#endif
     {
       upDownDist = dist( QPointF( pixelXMM, pixelYMM ), intersectionPoint );
     }
@@ -189,11 +211,7 @@ double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p
   else if ( residual.y() < 0 )
   {
     const QLineF upperFrameLine( 0, 0, mExtent.xMaximum(), 0 );
-#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
-    if ( residualLine.intersect( upperFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#else
     if ( residualLine.intersects( upperFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#endif
     {
       upDownDist = dist( QPointF( pixelXMM, pixelYMM ), intersectionPoint );
     }
@@ -203,11 +221,7 @@ double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p
   if ( residual.x() > 0 )
   {
     const QLineF rightFrameLine( rect().width(), 0, rect().width(), rect().height() );
-#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
-    if ( residualLine.intersect( rightFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#else
     if ( residualLine.intersects( rightFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#endif
     {
       leftRightDist = dist( QPointF( pixelXMM, pixelYMM ), intersectionPoint );
     }
@@ -215,11 +229,7 @@ double QgsResidualPlotItem::maxMMToPixelRatioForGCP( const QgsGeorefDataPoint *p
   else if ( residual.x() < 0 )
   {
     const QLineF leftFrameLine( 0, 0, 0, rect().height() );
-#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
-    if ( residualLine.intersect( leftFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#else
     if ( residualLine.intersects( leftFrameLine, &intersectionPoint ) != QLineF::NoIntersection )
-#endif
     {
       leftRightDist = dist( QPointF( pixelXMM, pixelYMM ), intersectionPoint );
     }

@@ -15,27 +15,31 @@
  ***************************************************************************/
 
 #include "qgsexternalresourcewidget.h"
+
+#include "qgsapplication.h"
+#include "qgsexternalstorage.h"
+#include "qgsexternalstoragefilewidget.h"
+#include "qgsmediawidget.h"
+#include "qgsmessagebar.h"
+#include "qgsnetworkaccessmanager.h"
 #include "qgspixmaplabel.h"
 #include "qgsproject.h"
-#include "qgsapplication.h"
-#include "qgsnetworkaccessmanager.h"
 #include "qgstaskmanager.h"
-#include "qgsexternalstorage.h"
-#include "qgsmessagebar.h"
-#include "qgsexternalstoragefilewidget.h"
 
 #include <QDir>
 #include <QGridLayout>
-#include <QVariant>
-#include <QSettings>
 #include <QImageReader>
-#include <QToolButton>
-#include <QMimeType>
 #include <QMimeDatabase>
+#include <QMimeType>
 #include <QMovie>
-#ifdef WITH_QTWEBKIT
-#include <QWebView>
-#endif
+#include <QSettings>
+#include <QString>
+#include <QToolButton>
+#include <QVariant>
+
+#include "moc_qgsexternalresourcewidget.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsExternalResourceWidget::QgsExternalResourceWidget( QWidget *parent )
   : QWidget( parent )
@@ -53,21 +57,18 @@ QgsExternalResourceWidget::QgsExternalResourceWidget( QWidget *parent )
   mPixmapLabel = new QgsPixmapLabel( this );
   layout->addWidget( mPixmapLabel, 1, 0 );
 
-#ifdef WITH_QTWEBKIT
-  mWebView = new QWebView( this );
-  mWebView->setAcceptDrops( false );
-  layout->addWidget( mWebView, 2, 0 );
-#endif
+  mMediaWidget = new QgsMediaWidget( this );
+  layout->addWidget( mMediaWidget, 3, 0 );
 
   mLoadingLabel = new QLabel( this );
-  layout->addWidget( mLoadingLabel, 3, 0 );
-  mLoadingMovie = new QMovie( QgsApplication::iconPath( QStringLiteral( "/mIconLoading.gif" ) ), QByteArray(), this );
+  layout->addWidget( mLoadingLabel, 4, 0 );
+  mLoadingMovie = new QMovie( QgsApplication::iconPath( u"/mIconLoading.gif"_s ), QByteArray(), this );
   mLoadingMovie->setScaledSize( QSize( 32, 32 ) );
   mLoadingLabel->setMovie( mLoadingMovie );
 
   mErrorLabel = new QLabel( this );
-  layout->addWidget( mErrorLabel, 4, 0 );
-  mErrorLabel->setPixmap( QPixmap( QgsApplication::iconPath( QStringLiteral( "/mIconWarning.svg" ) ) ) );
+  layout->addWidget( mErrorLabel, 5, 0 );
+  mErrorLabel->setPixmap( QPixmap( QgsApplication::iconPath( u"/mIconWarning.svg"_s ) ) );
 
   updateDocumentViewer();
 
@@ -77,18 +78,24 @@ QgsExternalResourceWidget::QgsExternalResourceWidget( QWidget *parent )
   connect( mFileWidget, &QgsFileWidget::fileChanged, this, &QgsExternalResourceWidget::valueChanged );
 }
 
-QVariant QgsExternalResourceWidget::documentPath( QVariant::Type type ) const
+QVariant QgsExternalResourceWidget::documentPath( QMetaType::Type type ) const
 {
   const QString path = mFileWidget->filePath();
   if ( path.isEmpty() || path == QgsApplication::nullRepresentation() )
   {
-    return QVariant( type );
+    return QgsVariantUtils::createNullVariant( type );
   }
   else
   {
     return path;
   }
 }
+
+QVariant QgsExternalResourceWidget::documentPath( QVariant::Type type ) const
+{
+  return documentPath( QgsVariantUtils::variantTypeToMetaType( type ) );
+}
+
 
 void QgsExternalResourceWidget::setDocumentPath( const QVariant &path )
 {
@@ -157,41 +164,63 @@ void QgsExternalResourceWidget::updateDocumentViewer()
   mLoadingLabel->setVisible( false );
   mLoadingMovie->stop();
 
-#ifdef WITH_QTWEBKIT
-  mWebView->setVisible( mDocumentViewerContent == Web );
-#endif
-
-  mPixmapLabel->setVisible( mDocumentViewerContent == Image );
-
-  if ( mDocumentViewerContent == Image )
+  switch ( mDocumentViewerContent )
   {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    const QPixmap pm = mPixmapLabel->pixmap() ? *mPixmapLabel->pixmap() : QPixmap();
-#else
-    const QPixmap pm = mPixmapLabel->pixmap();
-#endif
-
-    if ( !pm || pm.isNull() )
+    case Web:
     {
-      mPixmapLabel->setMinimumSize( QSize( 0, 0 ) );
+      mMediaWidget->setVisible( false );
+      mPixmapLabel->setVisible( false );
+      break;
     }
-    else
-    {
-      QSize size( mDocumentViewerWidth, mDocumentViewerHeight );
-      if ( size.width() == 0 && size.height() > 0 )
-      {
-        size.setWidth( size.height() * pm.size().width() / pm.size().height() );
-      }
-      else if ( size.width() > 0 && size.height() == 0 )
-      {
-        size.setHeight( size.width() * pm.size().height() / pm.size().width() );
-      }
 
-      if ( size.width() != 0 || size.height() != 0 )
+    case Image:
+    {
+      mMediaWidget->setVisible( false );
+      mPixmapLabel->setVisible( true );
+
+      const QPixmap pm = mPixmapLabel->pixmap();
+
+      if ( !pm || pm.isNull() )
       {
-        mPixmapLabel->setMinimumSize( size );
-        mPixmapLabel->setMaximumSize( size );
+        mPixmapLabel->setMinimumSize( QSize( 0, 0 ) );
       }
+      else
+      {
+        QSize size( mDocumentViewerWidth, mDocumentViewerHeight );
+        if ( size.width() == 0 && size.height() > 0 )
+        {
+          size.setWidth( size.height() * pm.size().width() / pm.size().height() );
+        }
+        else if ( size.width() > 0 && size.height() == 0 )
+        {
+          size.setHeight( size.width() * pm.size().height() / pm.size().width() );
+        }
+
+        if ( size.width() != 0 || size.height() != 0 )
+        {
+          mPixmapLabel->setMinimumSize( size );
+          mPixmapLabel->setMaximumSize( size );
+        }
+      }
+      break;
+    }
+
+    case Audio:
+    case Video:
+    {
+      mMediaWidget->setVisible( true );
+      mPixmapLabel->setVisible( false );
+
+      mMediaWidget->setMode( mDocumentViewerContent == Video ? QgsMediaWidget::Video : QgsMediaWidget::Audio );
+      mMediaWidget->setVideoHeight( mDocumentViewerHeight );
+      break;
+    }
+
+    case NoContent:
+    {
+      mMediaWidget->setVisible( false );
+      mPixmapLabel->setVisible( false );
+      break;
     }
   }
 }
@@ -267,24 +296,37 @@ QgsMessageBar *QgsExternalResourceWidget::messageBar() const
 
 void QgsExternalResourceWidget::updateDocumentContent( const QString &filePath )
 {
-#ifdef WITH_QTWEBKIT
-  if ( mDocumentViewerContent == Web )
+  switch ( mDocumentViewerContent )
   {
-    mWebView->load( QUrl::fromEncoded( filePath.toUtf8() ) );
-    mWebView->page()->settings()->setAttribute( QWebSettings::LocalStorageEnabled, true );
-  }
-#endif
+    case Image:
+    {
+      QImageReader ir( filePath );
+      // ensure image orientation and transforms are correctly handled
+      ir.setAutoTransform( true );
+      const QPixmap pm = QPixmap::fromImage( ir.read() );
+      if ( !pm.isNull() )
+      {
+        mPixmapLabel->setPixmap( pm );
+      }
+      else
+      {
+        mPixmapLabel->clear();
+      }
+      break;
+    }
 
-  if ( mDocumentViewerContent == Image )
-  {
-    // use an image reader to ensure image orientation and transforms are correctly handled
-    QImageReader ir( filePath );
-    ir.setAutoTransform( true );
-    const QPixmap pm = QPixmap::fromImage( ir.read() );
-    if ( !pm.isNull() )
-      mPixmapLabel->setPixmap( pm );
-    else
-      mPixmapLabel->clear();
+    case Audio:
+    case Video:
+    {
+      mMediaWidget->setMediaPath( filePath );
+      break;
+    }
+
+    case Web:
+    case NoContent:
+    {
+      break;
+    }
   }
 
   updateDocumentViewer();
@@ -292,12 +334,6 @@ void QgsExternalResourceWidget::updateDocumentContent( const QString &filePath )
 
 void QgsExternalResourceWidget::clearContent()
 {
-#ifdef WITH_QTWEBKIT
-  if ( mDocumentViewerContent == Web )
-  {
-    mWebView->load( QUrl( QStringLiteral( "about:blank" ) ) );
-  }
-#endif
   if ( mDocumentViewerContent == Image )
   {
     mPixmapLabel->clear();
@@ -331,9 +367,7 @@ void QgsExternalResourceWidget::loadDocument( const QString &path )
 
       mContent = mFileWidget->externalStorage()->fetch( resolvedPath, storageAuthConfigId() );
 
-#ifdef WITH_QTWEBKIT
-      mWebView->setVisible( false );
-#endif
+      mMediaWidget->setVisible( false );
       mPixmapLabel->setVisible( false );
       mErrorLabel->setVisible( false );
       mLoadingLabel->setVisible( true );
@@ -357,9 +391,6 @@ void QgsExternalResourceWidget::onFetchFinished()
 
   if ( content == mContent && mContent->status() == Qgis::ContentStatus::Failed )
   {
-#ifdef WITH_QTWEBKIT
-    mWebView->setVisible( false );
-#endif
     mPixmapLabel->setVisible( false );
     mLoadingLabel->setVisible( false );
     mLoadingMovie->stop();
@@ -367,16 +398,12 @@ void QgsExternalResourceWidget::onFetchFinished()
 
     if ( messageBar() )
     {
-      messageBar()->pushWarning( tr( "Fetching External Resource" ),
-                                 tr( "Error while fetching external resource '%1' : %2" ).arg(
-                                   mFileWidget->filePath(), mContent->errorString() ) );
+      messageBar()->pushWarning( tr( "Fetching External Resource" ), tr( "Error while fetching external resource '%1' : %2" ).arg( mFileWidget->filePath(), mContent->errorString() ) );
     }
   }
   else if ( content == mContent && mContent->status() == Qgis::ContentStatus::Finished )
   {
-    const QString filePath = mDocumentViewerContent == Web
-                             ? QString( "file://%1" ).arg( mContent->filePath() )
-                             : mContent->filePath();
+    const QString filePath = mDocumentViewerContent == Web ? QUrl::fromLocalFile( mContent->filePath() ).toString() : mContent->filePath();
 
     updateDocumentContent( filePath );
   }

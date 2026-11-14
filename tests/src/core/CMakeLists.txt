@@ -8,6 +8,23 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/test
 )
 
+if (WITH_INTERNAL_LAZPERF)
+  include_directories(
+    ${CMAKE_SOURCE_DIR}/external/lazperf
+  )
+
+  set(TEST_LAZPERF_SUPPRESSION_OPTIONS)
+  if(HAVE_WFLAG_SUGGEST_OVERRIDE)
+    list(APPEND TEST_LAZPERF_SUPPRESSION_OPTIONS "-Wno-suggest-override")
+  endif()
+  if(HAVE_WFLAG_SUGGEST_DESTRUCTOR_OVERRIDE)
+    list(APPEND TEST_LAZPERF_SUPPRESSION_OPTIONS "-Wno-suggest-destructor-override")
+  endif()
+  if (TEST_LAZPERF_SUPPRESSION_OPTIONS)
+    set_source_files_properties(testqgspointcloudediting.cpp PROPERTIES COMPILE_OPTIONS "${TEST_LAZPERF_SUPPRESSION_OPTIONS}")
+  endif()
+endif()
+
 if(HAVE_OPENCL)
     include_directories(SYSTEM ${OpenCL_INCLUDE_DIRS})
 endif()
@@ -22,6 +39,7 @@ set(TESTS
  testqgsannotationitemregistry.cpp
  testqgsapplication.cpp
  testqgsarcgisrestutils.cpp
+ testqgsattributeeditorelement.cpp
  testqgsauthcertutils.cpp
  testqgsauthconfig.cpp
  testqgsauthcrypto.cpp
@@ -40,35 +58,44 @@ set(TESTS
  testqgsconnectionpool.cpp
  testqgscoordinatereferencesystemregistry.cpp
  testqgscoordinatetransform.cpp
+ testqgscoordinateutils.cpp
  testqgscopyfiletask.cpp
  testqgscredentials.cpp
  testqgscurve.cpp
  testqgsdatadefinedsizelegend.cpp
+ testqgsdatadefinedutils.cpp
  testqgsdataitem.cpp
  testqgsdatasourceuri.cpp
  testqgsdiagram.cpp
  testqgsdistancearea.cpp
  testqgsdxfexport.cpp
+ testqgselevationmap.cpp
  testqgsellipsemarker.cpp
  testqgsexpression.cpp
  testqgsexpressioncontext.cpp
  testqgsfeature.cpp
+ testqgsfeaturerequest.cpp
  testqgsfield.cpp
  testqgsfields.cpp
  testqgsfilledmarker.cpp
  testqgsfontmarker.cpp
  testqgsfontutils.cpp
+ testqgsfutureutils.cpp
+ testqgsgdalcloudconnection.cpp
  testqgsgdalprovider.cpp
  testqgsgdalutils.cpp
  testqgsgenericspatialindex.cpp
  testqgsgeometryimport.cpp
- testqgsgeonodeconnection.cpp
  testqgsgeopdfexport.cpp
+ testqgsgeos.cpp
+ testqgsgltfutils.cpp
  testqgsgml.cpp
+ testqgsgpkgtiles.cpp
  testqgsgradients.cpp
  testqgsgraduatedsymbolrenderer.cpp
  testqgshistogram.cpp
  testqgshstoreutils.cpp
+ testqgshttpheaders.cpp
  testqgsimagecache.cpp
  testqgsimageoperation.cpp
  testqgsinternalgeometryengine.cpp
@@ -76,13 +103,13 @@ set(TESTS
  testqgsjsonutils.cpp
  testqgslabelingengine.cpp
  testqgslayerdefinition.cpp
+ testqgslayeredsymbollevel.cpp
  testqgslayertree.cpp
  testqgslayout.cpp
  testqgslayoutatlas.cpp
  testqgslayoutcontext.cpp
  testqgslayoutexporter.cpp
  testqgslayoutgeopdfexport.cpp
- testqgslayouthtml.cpp
  testqgslayoutitem.cpp
  testqgslayoutitemgroup.cpp
  testqgslayoutlabel.cpp
@@ -115,6 +142,7 @@ set(TESTS
  testqgsmaptopixel.cpp
  testqgsmaptopixelgeometrysimplifier.cpp
  testqgsmarkerlinesymbol.cpp
+ testqgsmatrix4x4.cpp
  testqgsmesh3daveraging.cpp
  testqgsmesheditor.cpp
  testqgsmeshlayer.cpp
@@ -124,9 +152,11 @@ set(TESTS
  testqgsnetworkaccessmanager.cpp
  testqgsnetworkcontentfetcher.cpp
  testqgsnewsfeedparser.cpp
+ testqgsnmeaconnection.cpp
  testqgsofflineediting.cpp
  testqgsogcutils.cpp
  testqgsogrprovider.cpp
+ testqgsogrproviderdeadlock.cpp
  testqgsogrutils.cpp
  testqgsoverlayexpression.cpp
  testqgspagesizeregistry.cpp
@@ -134,6 +164,9 @@ set(TESTS
  testqgspainteffectregistry.cpp
  testqgspallabeling.cpp
  testqgspointcloudattribute.cpp
+ testqgspointcloudediting.cpp
+ testqgspointcloudexpression.cpp
+ testqgspointcloudlayerexporter.cpp
  testqgspointcloudrendererregistry.cpp
  testqgspointlocator.cpp
  testqgspointpatternfillsymbol.cpp
@@ -143,9 +176,11 @@ set(TESTS
  testqgsprojutils.cpp
  testqgsproperty.cpp
  testqgsprovidermetadata.cpp
+ testqgsquantizedmeshtiles.cpp
  testqgsrange.cpp
  testqgsrasterblock.cpp
  testqgsrastercontourrenderer.cpp
+ testqgsrastervectorfieldrenderer.cpp
  testqgsrasterdataprovidertemporalcapabilities.cpp
  testqgsrasterfilewriter.cpp
  testqgsrasterfill.cpp
@@ -158,16 +193,23 @@ set(TESTS
  testqgsrenderers.cpp
  testqgsrulebasedrenderer.cpp
  testqgsruntimeprofiler.cpp
+ testqgsscaleutils.cpp
+ testqgssensorthingsconnection.cpp
  testqgssettings.cpp
  testqgssettingsentry.cpp
  testqgssettingsregistry.cpp
  testqgsshapeburst.cpp
  testqgssimplemarker.cpp
+ testqgssimplifymethod.cpp
  testqgssnappingutils.cpp
  testqgsspatialindex.cpp
  testqgsspatialindexkdbush.cpp
  testqgssqliteexpressioncompiler.cpp
  testqgssqliteutils.cpp
+ testqgsstac.cpp
+ testqgsstackeddiagram.cpp
+ testqgsrelation.cpp
+ testqgsscopedconnection.cpp
  testqgsstatisticalsummary.cpp
  testqgsstoredexpressionmanager.cpp
  testqgsstringutils.cpp
@@ -179,6 +221,8 @@ set(TESTS
  testqgstemporalnavigationobject.cpp
  testqgstemporalproperty.cpp
  testqgstemporalrangeobject.cpp
+ testqgstiledsceneconnection.cpp
+ testqgstiledscenerendererregistry.cpp
  testqgstiledownloadmanager.cpp
  testqgstracer.cpp
  testqgstranslateproject.cpp
@@ -192,17 +236,16 @@ set(TESTS
  testqgsvectorlayerjoinbuffer.cpp
  testqgsvectorlayerutils.cpp
  testqgsvectortilelayer.cpp
+ testqgsvectortileconnection.cpp
+ testqgsvectortileutils.cpp
  testqgsvectortilewriter.cpp
  testqgstiles.cpp
  testqgsweakrelation.cpp
  testqgsziputils.cpp
+ testqobjectparentuniqueptr.cpp
  testqobjectuniqueptr.cpp
  testziplayer.cpp
 )
-
-if(WITH_QTWEBKIT)
-  set(TESTS ${TESTS})
-endif()
 
 if(HAVE_OPENCL)
   set(TESTS ${TESTS}
@@ -221,3 +264,4 @@ if (ENABLE_PGTEST)
 endif()
 
 add_subdirectory(geometry)
+add_subdirectory(vector)

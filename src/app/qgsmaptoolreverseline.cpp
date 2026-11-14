@@ -16,18 +16,15 @@
 #include "qgsmaptoolreverseline.h"
 
 #include "qgsfeatureiterator.h"
-#include "qgsmapcanvas.h"
-#include "qgsvertexmarker.h"
-#include "qgsvectorlayer.h"
 #include "qgsgeometry.h"
+#include "qgsmapcanvas.h"
+#include "qgsmapmouseevent.h"
+#include "qgsmulticurve.h"
 #include "qgsrubberband.h"
 #include "qgssnappingutils.h"
-#include "qgstolerance.h"
-#include "qgisapp.h"
-#include "qgslinestring.h"
-#include "qgsmultilinestring.h"
-#include "qgsmapmouseevent.h"
+#include "qgsvectorlayer.h"
 
+#include "moc_qgsmaptoolreverseline.cpp"
 
 QgsMapToolReverseLine::QgsMapToolReverseLine( QgsMapCanvas *canvas )
   : QgsMapToolEdit( canvas )
@@ -36,8 +33,7 @@ QgsMapToolReverseLine::QgsMapToolReverseLine( QgsMapCanvas *canvas )
 }
 
 QgsMapToolReverseLine::~QgsMapToolReverseLine()
-{
-}
+{}
 
 void QgsMapToolReverseLine::canvasMoveEvent( QgsMapMouseEvent *e )
 {
@@ -76,7 +72,6 @@ void QgsMapToolReverseLine::canvasPressEvent( QgsMapMouseEvent *e )
     mRubberBand->setToGeometry( geomPart, vlayer );
     mRubberBand->show();
   }
-
 }
 
 void QgsMapToolReverseLine::canvasReleaseEvent( QgsMapMouseEvent *e )
@@ -99,20 +94,17 @@ void QgsMapToolReverseLine::canvasReleaseEvent( QgsMapMouseEvent *e )
   {
     if ( f.geometry().isMultipart() )
     {
-      std::unique_ptr<QgsMultiCurve> line_reversed( static_cast<QgsMultiCurve * >( f.geometry().constGet()->clone() ) );
+      std::unique_ptr<QgsMultiCurve> line_reversed( static_cast<QgsMultiCurve *>( f.geometry().constGet()->clone() ) );
       std::unique_ptr<QgsCurve> line_part( line_reversed->curveN( mPressedPartNum )->clone() );
       std::unique_ptr<QgsCurve> line_part_reversed( line_part->reversed() );
       line_reversed->removeGeometry( mPressedPartNum );
       line_reversed->insertGeometry( line_part_reversed.release(), mPressedPartNum );
 
       geom = QgsGeometry( line_reversed.release() );
-
     }
     else
     {
-
-      geom = QgsGeometry( static_cast< const QgsCurve * >( f.geometry().constGet() )->reversed() );
-
+      geom = QgsGeometry( static_cast<const QgsCurve *>( f.geometry().constGet() )->reversed() );
     }
 
     if ( !geom.isNull() )
@@ -138,7 +130,7 @@ QgsGeometry QgsMapToolReverseLine::partUnderPoint( QPoint point, QgsFeatureId &f
 
   switch ( vlayer->geometryType() )
   {
-    case QgsWkbTypes::LineGeometry:
+    case Qgis::GeometryType::Line:
     {
       const QgsPointLocator::Match match = mCanvas->snappingUtils()->snapToCurrentLayer( point, QgsPointLocator::Types( QgsPointLocator::Vertex | QgsPointLocator::Edge ) );
       if ( !match.isValid() )
@@ -152,7 +144,7 @@ QgsGeometry QgsMapToolReverseLine::partUnderPoint( QPoint point, QgsFeatureId &f
         fid = match.featureId();
         return g;
       }
-      else if ( QgsWkbTypes::geometryType( g.wkbType() ) == QgsWkbTypes::LineGeometry )
+      else if ( QgsWkbTypes::geometryType( g.wkbType() ) == Qgis::GeometryType::Line )
       {
         QgsMultiPolylineXY mline = g.asMultiPolyline();
         for ( int part = 0; part < mline.count(); part++ )
@@ -180,4 +172,3 @@ void QgsMapToolReverseLine::deactivate()
 {
   QgsMapTool::deactivate();
 }
-

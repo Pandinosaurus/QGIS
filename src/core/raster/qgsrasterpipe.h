@@ -18,9 +18,9 @@
 #ifndef QGSRASTERPIPE_H
 #define QGSRASTERPIPE_H
 
+#include "qgis.h"
 #include "qgis_core.h"
 #include "qgis_sip.h"
-#include "qgis.h"
 #include "qgspropertycollection.h"
 
 #include <QImage>
@@ -38,7 +38,7 @@ class QgsRasterResampleFilter;
 class QgsContrastEnhancement;
 class QgsRasterDataProvider;
 
-#if defined(Q_OS_WIN)
+#if defined( Q_OS_WIN )
 #undef interface
 #endif
 
@@ -49,29 +49,43 @@ class QgsRasterDataProvider;
 class CORE_EXPORT QgsRasterPipe
 {
   public:
+    // *INDENT-OFF*
 
     /**
      * Data definable properties.
      * \since QGIS 3.22
      */
-    enum Property
+    enum class Property SIP_MONKEYPATCH_SCOPEENUM_UNNEST( QgsRasterPipe, Property ) : int
     {
       RendererOpacity, //!< Raster renderer global opacity
     };
+    // *INDENT-ON*
 
     /**
      * Constructor for an empty QgsRasterPipe.
      */
     QgsRasterPipe() = default;
 
-    /**
-     * Copy constructor.
-     */
     QgsRasterPipe( const QgsRasterPipe &pipe ) SIP_SKIP;
 
     ~QgsRasterPipe();
 
     QgsRasterPipe &operator=( const QgsRasterPipe &rh ) = delete;
+
+    /**
+     * Moves the pipe to another \a thread.
+     *
+     * This effects all QObject derived interfaces in the pipe, and follows the same
+     * behavior as QObject::moveToThread. Specifically, it is permitted to PUSH the
+     * pipe from the current thread to another thread, but NOT to PULL a pipe
+     * from another thread over to the current thread. Pulling is only supported
+     * by first pushsing the pipe from its current thread to a NULLPTR thread,
+     * and then later pulling to the current thread. See QObject documentation
+     * for more details.
+     *
+     * \since QGIS 3.30
+    */
+    void moveToThread( QThread *thread );
 
     /**
      * Attempts to insert interface at specified index and connect
@@ -82,6 +96,7 @@ class CORE_EXPORT QgsRasterPipe
     */
     bool insert( int idx, QgsRasterInterface *interface SIP_TRANSFER );
 #ifdef SIP_RUN
+    // clang-format off
     % MethodCode
     sipRes = sipCpp->insert( a0, a1 );
     if ( !sipRes )
@@ -92,9 +107,10 @@ class CORE_EXPORT QgsRasterPipe
         sipTransferTo( o, NULL );
     }
     % End
+// clang-format on
 #endif
 
-    /**
+      /**
      * Attempts to replace the interface at specified index and reconnect the pipe.
      *
      * If the connection would fail, the interface is not inserted and FALSE is returned.
@@ -102,7 +118,7 @@ class CORE_EXPORT QgsRasterPipe
      * \see insert()
      * \see set()
     */
-    bool replace( int idx, QgsRasterInterface *interface SIP_TRANSFER );
+      bool replace( int idx, QgsRasterInterface *interface SIP_TRANSFER );
 
     /**
      * Inserts a new known interface in default place or replace interface of the same
@@ -309,5 +325,3 @@ class CORE_EXPORT QgsRasterPipe
 };
 
 #endif
-
-

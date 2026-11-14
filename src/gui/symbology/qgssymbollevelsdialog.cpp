@@ -15,17 +15,20 @@
 
 #include "qgssymbollevelsdialog.h"
 
-#include "qgssymbollayerutils.h"
-#include "qgssymbollayer.h"
-#include "qgssymbol.h"
-#include "qgssettings.h"
 #include "qgsguiutils.h"
+#include "qgssymbol.h"
+#include "qgssymbollayer.h"
+#include "qgssymbollayerutils.h"
 
-#include <QTableWidgetItem>
+#include <QDialogButtonBox>
 #include <QItemDelegate>
 #include <QSpinBox>
-#include <QDialogButtonBox>
+#include <QString>
+#include <QTableWidgetItem>
 
+#include "moc_qgssymbollevelsdialog.cpp"
+
+using namespace Qt::StringLiterals;
 
 ////////////////
 
@@ -61,7 +64,7 @@ QgsSymbolLevelsWidget::QgsSymbolLevelsWidget( const QgsLegendSymbolList &symbols
     QgsSymbol *sym = mLegendSymbols.at( i ).symbol();
 
     // set icons for the rows
-    QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( sym, QSize( iconSize, iconSize ) );
+    QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( sym, QSize( iconSize, iconSize ), 0, nullptr, QgsScreenProperties( screen() ) );
     tableLevels->setVerticalHeaderItem( i, new QTableWidgetItem( icon, QString() ) );
 
     // find out max. number of layers per symbol
@@ -112,7 +115,8 @@ void QgsSymbolLevelsWidget::populateTable()
       else
       {
         const QgsSymbolLayer *sl = sym->symbolLayer( layer );
-        const QIcon icon = QgsSymbolLayerUtils::symbolLayerPreviewIcon( sl, QgsUnitTypes::RenderMillimeters, QSize( iconSize, iconSize ), QgsMapUnitScale(), sym->type() );
+        const QIcon icon
+          = QgsSymbolLayerUtils::symbolLayerPreviewIcon( sl, Qgis::RenderUnit::Millimeters, QSize( iconSize, iconSize ), QgsMapUnitScale(), sym->type(), nullptr, QgsScreenProperties( screen() ) );
         item = new QTableWidgetItem( icon, QString::number( sl->renderingPass() ) );
       }
       tableLevels->setItem( row, layer + 1, item );
@@ -124,7 +128,7 @@ void QgsSymbolLevelsWidget::populateTable()
 void QgsSymbolLevelsWidget::updateUi()
 {
   tableLevels->setEnabled( chkEnable->isChecked() );
-  emit widgetChanged();
+  emit changed();
 }
 
 void QgsSymbolLevelsWidget::apply()
@@ -175,7 +179,7 @@ void QgsSymbolLevelsWidget::renderingPassChanged( int row, int column )
     return;
   sym->symbolLayer( column - 1 )->setRenderingPass( tableLevels->item( row, column )->text().toInt() );
 
-  emit widgetChanged();
+  emit changed();
 }
 
 void QgsSymbolLevelsWidget::setForceOrderingEnabled( bool enabled )
@@ -227,7 +231,7 @@ QgsLegendSymbolList QgsSymbolLevelsDialog::symbolLevels() const
 
 void QgsSymbolLevelsDialog::showHelp()
 {
-  QgsHelp::openHelp( QStringLiteral( "working_with_vector/vector_properties.html#symbols-levels" ) );
+  QgsHelp::openHelp( u"working_with_vector/vector_properties.html#symbols-levels"_s );
 }
 
 /// @cond PRIVATE

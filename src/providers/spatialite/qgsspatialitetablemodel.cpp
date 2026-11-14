@@ -16,16 +16,19 @@
  ***************************************************************************/
 
 #include "qgsspatialitetablemodel.h"
-#include "qgsapplication.h"
+
 #include "qgsiconutils.h"
+
+#include <QString>
+
+#include "moc_qgsspatialitetablemodel.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsSpatiaLiteTableModel::QgsSpatiaLiteTableModel( QObject *parent )
   : QgsAbstractDbTableModel( parent )
 {
-  mColumns << tr( "Table" )
-           << tr( "Type" )
-           << tr( "Geometry column" )
-           << tr( "SQL" );
+  mColumns << tr( "Table" ) << tr( "Type" ) << tr( "Geometry column" ) << tr( "SQL" );
   setHorizontalHeaderLabels( mColumns );
 }
 
@@ -49,14 +52,14 @@ void QgsSpatiaLiteTableModel::addTableEntry( const QString &type, const QString 
 {
   //is there already a root item ?
   QStandardItem *dbItem = nullptr;
-  const QList < QStandardItem * >dbItems = findItems( mSqliteDb, Qt::MatchExactly, 0 );
+  const QList<QStandardItem *> dbItems = findItems( mSqliteDb, Qt::MatchExactly, 0 );
 
   //there is already an item
   if ( !dbItems.isEmpty() )
   {
     dbItem = dbItems.at( 0 );
   }
-  else                        //create a new toplevel item
+  else //create a new toplevel item
   {
     dbItem = new QStandardItem( mSqliteDb );
     dbItem->setFlags( Qt::ItemIsEnabled );
@@ -64,10 +67,10 @@ void QgsSpatiaLiteTableModel::addTableEntry( const QString &type, const QString 
   }
 
   //path to icon for specified type
-  const QgsWkbTypes::Type wkbType = qgisTypeFromDbType( type );
+  const Qgis::WkbType wkbType = qgisTypeFromDbType( type );
   const QIcon iconFile = iconForType( wkbType );
 
-  QList < QStandardItem * >childItemList;
+  QList<QStandardItem *> childItemList;
   QStandardItem *typeItem = new QStandardItem( QIcon( iconFile ), type );
   typeItem->setFlags( Qt::ItemIsEnabled | Qt::ItemIsSelectable );
   QStandardItem *tableItem = new QStandardItem( tableName );
@@ -112,12 +115,12 @@ void QgsSpatiaLiteTableModel::setSql( const QModelIndex &index, const QString &s
 
 void QgsSpatiaLiteTableModel::setGeometryTypesForTable( const QString &table, const QString &attribute, const QString &type )
 {
-  const bool typeIsEmpty = type.isEmpty();  //true means the table has no valid geometry entry and the item for this table should be removed
+  const bool typeIsEmpty = type.isEmpty(); //true means the table has no valid geometry entry and the item for this table should be removed
   const QStringList typeList = type.split( ',' );
 
   //find schema item and table item
   QStandardItem *dbItem = nullptr;
-  const QList < QStandardItem * >dbItems = findItems( mSqliteDb, Qt::MatchExactly, 0 );
+  const QList<QStandardItem *> dbItems = findItems( mSqliteDb, Qt::MatchExactly, 0 );
 
   if ( dbItems.empty() )
   {
@@ -148,8 +151,7 @@ void QgsSpatiaLiteTableModel::setGeometryTypesForTable( const QString &table, co
       continue;
     }
 
-    if ( itemFromIndex( currentTableIndex )->text() == table &&
-         ( geomColText == attribute || geomColText.startsWith( attribute + " AS " ) ) )
+    if ( itemFromIndex( currentTableIndex )->text() == table && ( geomColText == attribute || geomColText.startsWith( attribute + " AS " ) ) )
     {
       if ( typeIsEmpty )
       {
@@ -157,11 +159,11 @@ void QgsSpatiaLiteTableModel::setGeometryTypesForTable( const QString &table, co
         return;
       }
 
-      const QgsWkbTypes::Type wkbType = qgisTypeFromDbType( typeList.at( 0 ) );
+      const Qgis::WkbType wkbType = qgisTypeFromDbType( typeList.at( 0 ) );
       const QIcon myIcon = iconForType( wkbType );
       itemFromIndex( currentTypeIndex )->setText( typeList.at( 0 ) ); //todo: add other rows
       itemFromIndex( currentTypeIndex )->setIcon( myIcon );
-      if ( !geomColText.contains( QLatin1String( " AS " ) ) )
+      if ( !geomColText.contains( " AS "_L1 ) )
       {
         itemFromIndex( currentGeomColumnIndex )->setText( geomColText + " AS " + typeList.at( 0 ) );
       }
@@ -175,19 +177,17 @@ void QgsSpatiaLiteTableModel::setGeometryTypesForTable( const QString &table, co
   }
 }
 
-QIcon QgsSpatiaLiteTableModel::iconForType( QgsWkbTypes::Type type ) const
+QIcon QgsSpatiaLiteTableModel::iconForType( Qgis::WkbType type ) const
 {
-  if ( type == QgsWkbTypes::Point || type == QgsWkbTypes::Point25D || type == QgsWkbTypes::MultiPoint || type == QgsWkbTypes::MultiPoint25D )
+  if ( type == Qgis::WkbType::Point || type == Qgis::WkbType::Point25D || type == Qgis::WkbType::MultiPoint || type == Qgis::WkbType::MultiPoint25D )
   {
     return QgsIconUtils::iconPoint();
   }
-  else if ( type == QgsWkbTypes::LineString || type == QgsWkbTypes::LineString25D || type == QgsWkbTypes::MultiLineString
-            || type == QgsWkbTypes::MultiLineString25D )
+  else if ( type == Qgis::WkbType::LineString || type == Qgis::WkbType::LineString25D || type == Qgis::WkbType::MultiLineString || type == Qgis::WkbType::MultiLineString25D )
   {
     return QgsIconUtils::iconLine();
   }
-  else if ( type == QgsWkbTypes::Polygon || type == QgsWkbTypes::Polygon25D || type == QgsWkbTypes::MultiPolygon
-            || type == QgsWkbTypes::MultiPolygon25D )
+  else if ( type == Qgis::WkbType::Polygon || type == Qgis::WkbType::Polygon25D || type == Qgis::WkbType::MultiPolygon || type == Qgis::WkbType::MultiPolygon25D )
   {
     return QgsIconUtils::iconPolygon();
   }
@@ -195,60 +195,60 @@ QIcon QgsSpatiaLiteTableModel::iconForType( QgsWkbTypes::Type type ) const
     return QIcon();
 }
 
-QString QgsSpatiaLiteTableModel::displayStringForType( QgsWkbTypes::Type type ) const
+QString QgsSpatiaLiteTableModel::displayStringForType( Qgis::WkbType type ) const
 {
-  if ( type == QgsWkbTypes::Point || type == QgsWkbTypes::Point25D )
+  if ( type == Qgis::WkbType::Point || type == Qgis::WkbType::Point25D )
   {
     return tr( "Point" );
   }
-  else if ( type == QgsWkbTypes::MultiPoint || type == QgsWkbTypes::MultiPoint25D )
+  else if ( type == Qgis::WkbType::MultiPoint || type == Qgis::WkbType::MultiPoint25D )
   {
     return tr( "Multipoint" );
   }
-  else if ( type == QgsWkbTypes::LineString || type == QgsWkbTypes::LineString25D )
+  else if ( type == Qgis::WkbType::LineString || type == Qgis::WkbType::LineString25D )
   {
     return tr( "Line" );
   }
-  else if ( type == QgsWkbTypes::MultiLineString || type == QgsWkbTypes::MultiLineString25D )
+  else if ( type == Qgis::WkbType::MultiLineString || type == Qgis::WkbType::MultiLineString25D )
   {
     return tr( "Multiline" );
   }
-  else if ( type == QgsWkbTypes::Polygon || type == QgsWkbTypes::Polygon25D )
+  else if ( type == Qgis::WkbType::Polygon || type == Qgis::WkbType::Polygon25D )
   {
     return tr( "Polygon" );
   }
-  else if ( type == QgsWkbTypes::MultiPolygon || type == QgsWkbTypes::MultiPolygon25D )
+  else if ( type == Qgis::WkbType::MultiPolygon || type == Qgis::WkbType::MultiPolygon25D )
   {
     return tr( "Multipolygon" );
   }
-  return QStringLiteral( "Unknown" );
+  return u"Unknown"_s;
 }
 
-QgsWkbTypes::Type QgsSpatiaLiteTableModel::qgisTypeFromDbType( const QString &dbType ) const
+Qgis::WkbType QgsSpatiaLiteTableModel::qgisTypeFromDbType( const QString &dbType ) const
 {
-  if ( dbType == QLatin1String( "POINT" ) )
+  if ( dbType == "POINT"_L1 )
   {
-    return QgsWkbTypes::Point;
+    return Qgis::WkbType::Point;
   }
-  else if ( dbType == QLatin1String( "MULTIPOINT" ) )
+  else if ( dbType == "MULTIPOINT"_L1 )
   {
-    return QgsWkbTypes::MultiPoint;
+    return Qgis::WkbType::MultiPoint;
   }
-  else if ( dbType == QLatin1String( "LINESTRING" ) )
+  else if ( dbType == "LINESTRING"_L1 )
   {
-    return QgsWkbTypes::LineString;
+    return Qgis::WkbType::LineString;
   }
-  else if ( dbType == QLatin1String( "MULTILINESTRING" ) )
+  else if ( dbType == "MULTILINESTRING"_L1 )
   {
-    return QgsWkbTypes::MultiLineString;
+    return Qgis::WkbType::MultiLineString;
   }
-  else if ( dbType == QLatin1String( "POLYGON" ) )
+  else if ( dbType == "POLYGON"_L1 )
   {
-    return QgsWkbTypes::Polygon;
+    return Qgis::WkbType::Polygon;
   }
-  else if ( dbType == QLatin1String( "MULTIPOLYGON" ) )
+  else if ( dbType == "MULTIPOLYGON"_L1 )
   {
-    return QgsWkbTypes::MultiPolygon;
+    return Qgis::WkbType::MultiPolygon;
   }
-  return QgsWkbTypes::Unknown;
+  return Qgis::WkbType::Unknown;
 }

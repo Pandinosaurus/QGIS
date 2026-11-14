@@ -13,12 +13,15 @@
  *                                                                         *
  ***************************************************************************/
 #include "qgstest.h"
+
+#include <QApplication>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QObject>
 #include <QString>
-#include <QApplication>
-#include <QFileInfo>
-#include <QDir>
-#include <QDesktopServices>
+
+using namespace Qt::StringLiterals;
 
 //qgis includes...
 #include <qgsapplication.h>
@@ -27,14 +30,18 @@
 #include <qgspoint.h>
 #include "qgsreferencedgeometry.h"
 
-class TestQgsPointXY: public QObject
+class TestQgsPointXY : public QgsTest
 {
     Q_OBJECT
+  public:
+    TestQgsPointXY()
+      : QgsTest( u"QgsPointXY Tests"_s )
+    {}
+
   private slots:
-    void initTestCase();// will be called before the first testfunction is executed.
-    void cleanupTestCase();// will be called after the last testfunction was executed.
-    void init();// will be called before each testfunction is executed.
-    void cleanup();// will be called after every testfunction.
+    void initTestCase(); // will be called before the first testfunction is executed.
+    void init();         // will be called before each testfunction is executed.
+    void cleanup();      // will be called after every testfunction.
     void equality();
     void gettersSetters();
     void constructors();
@@ -56,7 +63,6 @@ class TestQgsPointXY: public QObject
     QgsPointXY mPoint2;
     QgsPointXY mPoint3;
     QgsPointXY mPoint4;
-    QString mReport;
 };
 
 void TestQgsPointXY::init()
@@ -164,34 +170,10 @@ void TestQgsPointXY::initTestCase()
   // init QGIS's paths - true means that all path will be inited from prefix
   QgsApplication::init();
   QgsApplication::showSettings();
-  mReport += QLatin1String( "<h1>Point Tests</h1>\n" );
-}
-
-
-void TestQgsPointXY::cleanupTestCase()
-{
-  //
-  // Runs once after all tests are run
-  //
-  const QString myReportFile = QDir::tempPath() + "/qgistest.html";
-  QFile myFile( myReportFile );
-  if ( myFile.open( QIODevice::WriteOnly | QIODevice::Append ) )
-  {
-    QTextStream myQTextStream( &myFile );
-    myQTextStream << mReport;
-    myFile.close();
-    //QDesktopServices::openUrl( "file:///" + myReportFile );
-  }
-
 }
 
 void TestQgsPointXY::toString()
 {
-  mReport += QLatin1String( "<p>Testing toString()</p>" );
-  mReport += "<p>" + mPoint1.toString( 2 )  +  "</p>";
-  mReport += "<p>" + mPoint2.toString( 2 )  +  "</p>";
-  mReport += "<p>" + mPoint3.toString( 2 )  +  "</p>";
-  mReport += "<p>" + mPoint4.toString( 2 )  +  "</p>";
   QCOMPARE( mPoint1.toString( 2 ), QString( "20.00,-20.00" ) );
   QCOMPARE( QgsPointXY().toString( 2 ), QString( "0.00,0.00" ) );
 }
@@ -347,8 +329,7 @@ void TestQgsPointXY::asVariant()
   //convert to and from a QVariant
   const QVariant var = QVariant::fromValue( p1 );
   QVERIFY( var.isValid() );
-  QVERIFY( var.canConvert< QgsPointXY >() );
-  QVERIFY( !var.canConvert< QgsReferencedPointXY >() );
+  QCOMPARE( var.userType(), qMetaTypeId<QgsPointXY>() );
 
   const QgsPointXY p2 = qvariant_cast<QgsPointXY>( var );
   QCOMPARE( p2.x(), p1.x() );
@@ -357,10 +338,10 @@ void TestQgsPointXY::asVariant()
 
 void TestQgsPointXY::referenced()
 {
-  QgsReferencedPointXY p1 = QgsReferencedPointXY( QgsPointXY( 10.0, 20.0 ), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) ) );
-  QCOMPARE( p1.crs().authid(), QStringLiteral( "EPSG:3111" ) );
-  p1.setCrs( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:28356" ) ) );
-  QCOMPARE( p1.crs().authid(), QStringLiteral( "EPSG:28356" ) );
+  QgsReferencedPointXY p1 = QgsReferencedPointXY( QgsPointXY( 10.0, 20.0 ), QgsCoordinateReferenceSystem( u"EPSG:3111"_s ) );
+  QCOMPARE( p1.crs().authid(), u"EPSG:3111"_s );
+  p1.setCrs( QgsCoordinateReferenceSystem( u"EPSG:28356"_s ) );
+  QCOMPARE( p1.crs().authid(), u"EPSG:28356"_s );
 
   //convert to and from a QVariant
   const QVariant var = QVariant::fromValue( p1 );
@@ -369,12 +350,12 @@ void TestQgsPointXY::referenced()
   // not great - we'd ideally like this to pass, but it doesn't:
   // QVERIFY( !var.canConvert< QgsPointXY >() );
 
-  QVERIFY( var.canConvert< QgsReferencedPointXY >() );
+  QCOMPARE( var.userType(), qMetaTypeId<QgsReferencedPointXY>() );
 
   const QgsReferencedPointXY p2 = qvariant_cast<QgsReferencedPointXY>( var );
   QCOMPARE( p2.x(), p1.x() );
   QCOMPARE( p2.y(), p1.y() );
-  QCOMPARE( p2.crs().authid(), QStringLiteral( "EPSG:28356" ) );
+  QCOMPARE( p2.crs().authid(), u"EPSG:28356"_s );
 }
 
 void TestQgsPointXY::isEmpty()
@@ -384,7 +365,7 @@ void TestQgsPointXY::isEmpty()
   QCOMPARE( pointEmpty.x(), 0.0 );
   QCOMPARE( pointEmpty.y(), 0.0 );
   pointEmpty.setX( 7 );
-  QVERIFY( ! pointEmpty.isEmpty() );
+  QVERIFY( !pointEmpty.isEmpty() );
   QCOMPARE( pointEmpty.x(), 7.0 );
   QCOMPARE( pointEmpty.y(), 0.0 );
   pointEmpty = QgsPointXY();
@@ -392,14 +373,14 @@ void TestQgsPointXY::isEmpty()
   QCOMPARE( pointEmpty.x(), 0.0 );
   QCOMPARE( pointEmpty.y(), 0.0 );
   pointEmpty.setY( 4 );
-  QVERIFY( ! pointEmpty.isEmpty() );
+  QVERIFY( !pointEmpty.isEmpty() );
   QCOMPARE( pointEmpty.x(), 0.0 );
   QCOMPARE( pointEmpty.y(), 4.0 );
 
   QVERIFY( QgsPointXY( QgsPoint() ).isEmpty() );
   // "can't" be empty
-  QVERIFY( ! QgsPointXY( QPoint() ).isEmpty() );
-  QVERIFY( ! QgsPointXY( QPointF() ).isEmpty() );
+  QVERIFY( !QgsPointXY( QPoint() ).isEmpty() );
+  QVERIFY( !QgsPointXY( QPointF() ).isEmpty() );
 }
 
 QGSTEST_MAIN( TestQgsPointXY )

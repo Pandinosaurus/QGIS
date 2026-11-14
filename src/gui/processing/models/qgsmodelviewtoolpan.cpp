@@ -14,9 +14,13 @@
  ***************************************************************************/
 
 #include "qgsmodelviewtoolpan.h"
-#include "qgsmodelviewmouseevent.h"
+
 #include "qgsmodelgraphicsview.h"
+#include "qgsmodelviewmouseevent.h"
+
 #include <QScrollBar>
+
+#include "moc_qgsmodelviewtoolpan.cpp"
 
 QgsModelViewToolPan::QgsModelViewToolPan( QgsModelGraphicsView *view )
   : QgsModelViewTool( view, tr( "Pan" ) )
@@ -36,7 +40,7 @@ void QgsModelViewToolPan::modelPressEvent( QgsModelViewMouseEvent *event )
 
   mIsPanning = true;
   mLastMousePos = event->pos();
-  view()->setCursor( Qt::ClosedHandCursor );
+  view()->viewport()->setCursor( Qt::ClosedHandCursor );
 }
 
 void QgsModelViewToolPan::modelMoveEvent( QgsModelViewMouseEvent *event )
@@ -79,7 +83,7 @@ void QgsModelViewToolPan::modelReleaseEvent( QgsModelViewMouseEvent *event )
   }
 
   mIsPanning = false;
-  view()->setCursor( Qt::OpenHandCursor );
+  view()->viewport()->setCursor( Qt::OpenHandCursor );
 }
 
 void QgsModelViewToolPan::deactivate()

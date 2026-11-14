@@ -16,13 +16,11 @@
 #ifndef QGSANNOTATIONLAYERPROPERTIES_H
 #define QGSANNOTATIONLAYERPROPERTIES_H
 
-#include "qgsoptionsdialogbase.h"
-
 #include "ui_qgsannotationlayerpropertiesbase.h"
 
-#include "qgsmaplayerstylemanager.h"
-
+#include "qgis_app.h"
 #include "qgsannotationlayer.h"
+#include "qgslayerpropertiesdialog.h"
 
 class QgsMapLayer;
 class QgsMapCanvas;
@@ -32,52 +30,32 @@ class QgsMetadataWidget;
 class QgsMapLayerConfigWidgetFactory;
 class QgsMapLayerConfigWidget;
 
-
-class QgsAnnotationLayerProperties : public QgsOptionsDialogBase, private Ui::QgsAnnotationLayerPropertiesBase
+class APP_EXPORT QgsAnnotationLayerProperties : public QgsLayerPropertiesDialog, private Ui::QgsAnnotationLayerPropertiesBase
 {
     Q_OBJECT
   public:
     QgsAnnotationLayerProperties( QgsAnnotationLayer *layer, QgsMapCanvas *canvas, QgsMessageBar *messageBar, QWidget *parent = nullptr, Qt::WindowFlags = QgsGuiUtils::ModalDialogFlags );
     ~QgsAnnotationLayerProperties() override;
 
-    void addPropertiesPageFactory( const QgsMapLayerConfigWidgetFactory *factory );
-
   private slots:
-    void apply();
-    void onCancel();
+    void apply() final;
+    void rollback() final;
 
-    void loadDefaultStyle();
-    void saveDefaultStyle();
-    void loadStyle();
-    void saveStyleAs();
     void aboutToShowStyleMenu();
     void showHelp();
-    void urlClicked( const QUrl &url );
     void crsChanged( const QgsCoordinateReferenceSystem &crs );
 
-  protected slots:
-    void optionsStackedWidget_CurrentChanged( int index ) override SIP_SKIP ;
-
   private:
-    void syncToLayer();
+    void syncToLayer() final;
 
   private:
     QgsAnnotationLayer *mLayer = nullptr;
 
     QPushButton *mBtnStyle = nullptr;
 
-    QgsMapCanvas *mMapCanvas = nullptr;
+    std::unique_ptr<QgsPaintEffect> mPaintEffect;
 
-    /**
-     * Previous layer style. Used to reset style to previous state if new style
-     * was loaded but dialog is canceled.
-    */
-    QgsMapLayerStyle mOldStyle;
-
-    std::unique_ptr< QgsPaintEffect > mPaintEffect;
-
-    QList<QgsMapLayerConfigWidget *> mConfigWidgets;
-
+    QgsCoordinateReferenceSystem mBackupCrs;
 };
 
 #endif // QGSANNOTATIONLAYERPROPERTIES_H

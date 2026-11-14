@@ -21,7 +21,6 @@
 #include "qgsmaplayertemporalproperties.h"
 #include "qgsmeshdataprovidertemporalcapabilities.h"
 
-
 /**
  * \class QgsMeshLayerTemporalProperties
  * \ingroup core
@@ -53,7 +52,6 @@ class CORE_EXPORT QgsMeshLayerTemporalProperties : public QgsMapLayerTemporalPro
     Q_OBJECT
 
   public:
-
     /**
      * Constructor for QgsMeshLayerTemporalProperties
      *
@@ -63,7 +61,6 @@ class CORE_EXPORT QgsMeshLayerTemporalProperties : public QgsMapLayerTemporalPro
     QgsMeshLayerTemporalProperties( QObject *parent SIP_TRANSFERTHIS = nullptr, bool enabled = true );
 
   public:
-
     QDomElement writeXml( QDomElement &element, QDomDocument &doc, const QgsReadWriteContext &context ) override;
     bool readXml( const QDomElement &element, const QgsReadWriteContext &context ) override;
     void setDefaultsFromDataProviderTemporalCapabilities( const QgsDataProviderTemporalCapabilities *capabilities ) override;
@@ -116,12 +113,28 @@ class CORE_EXPORT QgsMeshLayerTemporalProperties : public QgsMapLayerTemporalPro
      */
     void setIsValid( bool isValid );
 
+    /**
+     * Returns whether the time proporties are automatically reloaded from provider when project is opened or layer is reloaded
+     *
+     * \since QGIS 3.28
+     */
+    bool alwaysLoadReferenceTimeFromSource() const;
+
+    /**
+     * Sets whether the time proporties are automatically reloaded from provider when project is opened or layer is reloaded
+     *
+     * \param autoReloadFromProvider whether the time proporties is automatically reloaded
+     *
+     * \since QGIS 3.28
+     */
+    void setAlwaysLoadReferenceTimeFromSource( bool autoReloadFromProvider );
+
   private:
     QDateTime mReferenceTime;
     QgsDateTimeRange mTimeExtent;
-    QgsMeshDataProviderTemporalCapabilities::MatchingTemporalDatasetMethod mMatchingMethod =
-      QgsMeshDataProviderTemporalCapabilities::FindClosestDatasetBeforeStartRangeTime;
+    QgsMeshDataProviderTemporalCapabilities::MatchingTemporalDatasetMethod mMatchingMethod = QgsMeshDataProviderTemporalCapabilities::FindClosestDatasetBeforeStartRangeTime;
     bool mIsValid = false;
+    bool mAlwaysLoadReferenceTimeFromSource = false;
 };
 
 #endif // QGSMESHLAYERTEMPORALPROPERTIES_H

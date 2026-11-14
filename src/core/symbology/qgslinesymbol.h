@@ -16,8 +16,8 @@
 #ifndef QGSLINESYMBOL_H
 #define QGSLINESYMBOL_H
 
-#include "qgis_core.h"
 #include "qgis.h"
+#include "qgis_core.h"
 #include "qgssymbol.h"
 
 /**
@@ -29,12 +29,11 @@
 class CORE_EXPORT QgsLineSymbol : public QgsSymbol
 {
   public:
-
     /**
      * Create a line symbol with one symbol layer: SimpleLine with specified properties.
      * This is a convenience method for easier creation of line symbols.
      */
-    static QgsLineSymbol *createSimple( const QVariantMap &properties ) SIP_FACTORY;
+    static std::unique_ptr< QgsLineSymbol > createSimple( const QVariantMap &properties );
 
     /**
      * Constructor for QgsLineSymbol, with the specified list of initial symbol \a layers.
@@ -49,15 +48,14 @@ class CORE_EXPORT QgsLineSymbol : public QgsSymbol
      *
      * \see width()
      */
-    void setWidth( double width );
+    void setWidth( double width ) const;
 
     /**
      * Sets the width units for the whole symbol (including all symbol layers).
      * \param unit size units
      * \since QGIS 3.16
      */
-    void setWidthUnit( QgsUnitTypes::RenderUnit unit );
-
+    void setWidthUnit( Qgis::RenderUnit unit ) const;
 
     /**
      * Returns the estimated width for the whole symbol, which is the maximum width of
@@ -87,16 +85,14 @@ class CORE_EXPORT QgsLineSymbol : public QgsSymbol
     /**
      * Set data defined width for whole symbol (including all symbol layers).
      * \see dataDefinedWidth()
-     * \since QGIS 3.0
      */
-    void setDataDefinedWidth( const QgsProperty &property );
+    void setDataDefinedWidth( const QgsProperty &property ) const;
 
     /**
      * Returns data defined width for whole symbol (including all symbol layers).
      * \returns data defined width, or invalid property if size is not set
      * at the line level. Caller takes responsibility for deleting the returned object.
      * \see setDataDefinedWidth
-     * \since QGIS 3.0
      */
     QgsProperty dataDefinedWidth() const;
 
@@ -117,11 +113,8 @@ class CORE_EXPORT QgsLineSymbol : public QgsSymbol
     QgsLineSymbol *clone() const override SIP_FACTORY;
 
   private:
-
     void renderPolylineUsingLayer( QgsLineSymbolLayer *layer, const QPolygonF &points, QgsSymbolRenderContext &context );
-
 };
 
 
 #endif // QGSLINESYMBOL_H
-

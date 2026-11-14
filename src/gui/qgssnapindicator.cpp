@@ -17,37 +17,20 @@
 
 #include "qgsguiutils.h"
 #include "qgsmapcanvas.h"
+#include "qgssettingsentryimpl.h"
 #include "qgssettingsregistrycore.h"
 #include "qgsvectorlayer.h"
 #include "qgsvertexmarker.h"
 
 #include <QToolTip>
 
-
 QgsSnapIndicator::QgsSnapIndicator( QgsMapCanvas *canvas )
   : mCanvas( canvas )
 {
-  // We need to make sure that the internal pointers are invalidated if the canvas is deleted before this
-  // indicator.
-  // The canvas is specified again as the "receiver", just to silence clazy (official clazy recommendation
-  // for false positives).
-  mCanvasDestroyedConnection = QObject::connect( canvas, &QgsMapCanvas::destroyed, canvas, [ = ]()
-  {
-    mCanvas = nullptr;
-    mSnappingMarker = nullptr;
-  } );
+  mSnappingMarker.setParentOwner( canvas );
 }
 
-QgsSnapIndicator::~QgsSnapIndicator()
-{
-  if ( mSnappingMarker && mCanvas )
-  {
-    mCanvas->scene()->removeItem( mSnappingMarker );
-    delete mSnappingMarker;
-  }
-
-  QObject::disconnect( mCanvasDestroyedConnection );
-};
+QgsSnapIndicator::~QgsSnapIndicator() = default;
 
 void QgsSnapIndicator::setMatch( const QgsPointLocator::Match &match )
 {
@@ -58,21 +41,20 @@ void QgsSnapIndicator::setMatch( const QgsPointLocator::Match &match )
     if ( mSnappingMarker )
     {
       mCanvas->scene()->removeItem( mSnappingMarker );
-      delete mSnappingMarker; // need to delete since QGraphicsSene::removeItem transfers back ownership
+      mSnappingMarker.reset(); // need to delete since QGraphicsSene::removeItem transfers back ownership
     }
-    mSnappingMarker = nullptr;
     QToolTip::hideText();
   }
   else
   {
     if ( !mSnappingMarker )
     {
-      mSnappingMarker = new QgsVertexMarker( mCanvas ); // ownership of the marker is transferred to QGraphicsScene
+      mSnappingMarker.reset( new QgsVertexMarker( mCanvas ) );
       mSnappingMarker->setIconSize( QgsGuiUtils::scaleIconSize( 10 ) );
       mSnappingMarker->setPenWidth( QgsGuiUtils::scaleIconSize( 3 ) );
     }
 
-    const QColor color = QgsSettingsRegistryCore::settingsDigitizingSnapColor.value();
+    const QColor color = QgsSettingsRegistryCore::settingsDigitizingSnapColor->value();
     mSnappingMarker->setColor( color );
 
     int iconType;
@@ -83,9 +65,9 @@ void QgsSnapIndicator::setMatch( const QgsPointLocator::Match &match )
     else if ( match.hasVertex() )
     {
       if ( match.layer() )
-        iconType = QgsVertexMarker::ICON_BOX;  // vertex snap
+        iconType = QgsVertexMarker::ICON_BOX; // vertex snap
       else
-        iconType = QgsVertexMarker::ICON_X;  // intersection snap
+        iconType = QgsVertexMarker::ICON_X; // intersection snap
     }
     else if ( match.hasMiddleSegment() )
     {
@@ -99,7 +81,7 @@ void QgsSnapIndicator::setMatch( const QgsPointLocator::Match &match )
     {
       iconType = QgsVertexMarker::ICON_RHOMBUS; // area snap
     }
-    else  // must be segment snap
+    else // must be segment snap
     {
       iconType = QgsVertexMarker::ICON_DOUBLE_TRIANGLE;
     }
@@ -109,11 +91,11 @@ void QgsSnapIndicator::setMatch( const QgsPointLocator::Match &match )
     mSnappingMarker->setCenter( match.point() );
 
     // tooltip
-    if ( QgsSettingsRegistryCore::settingsDigitizingSnapTooltip.value() )
+    if ( QgsSettingsRegistryCore::settingsDigitizingSnapTooltip->value() )
     {
       const QPoint ptCanvas = mSnappingMarker->toCanvasCoordinates( match.point() ).toPoint();
       const QPoint ptGlobal = mCanvas->mapToGlobal( ptCanvas );
-      const QRect rect( ptCanvas.x(), ptCanvas.y(), 1, 1 );  // area where is the tooltip valid
+      const QRect rect( ptCanvas.x(), ptCanvas.y(), 1, 1 ); // area where is the tooltip valid
       const QString layerName = match.layer() ? match.layer()->name() : QString();
       QToolTip::showText( ptGlobal, layerName, mCanvas, rect );
     }

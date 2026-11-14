@@ -16,10 +16,14 @@
  ***************************************************************************/
 
 #include "qgscoordinateformatter.h"
+
 #include "qgis.h"
 
-#include <QObject> // for tr()
 #include <QLocale>
+#include <QObject>
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 QString QgsCoordinateFormatter::formatX( double x, QgsCoordinateFormatter::Format format, int precision, FormatFlags flags )
 {
@@ -59,24 +63,43 @@ QString QgsCoordinateFormatter::formatY( double y, QgsCoordinateFormatter::Forma
   return QString(); //avoid warnings
 }
 
-QString QgsCoordinateFormatter::format( const QgsPointXY &point, QgsCoordinateFormatter::Format format, int precision, FormatFlags flags )
+QString QgsCoordinateFormatter::format( const QgsPointXY &point, QgsCoordinateFormatter::Format format, int precision, FormatFlags flags, Qgis::CoordinateOrder order )
 {
-  return QStringLiteral( "%1%2%3" ).arg( formatX( point.x(), format, precision, flags ),
-                                         QgsCoordinateFormatter::separator(),
-                                         formatY( point.y(), format, precision, flags ) );
+  const QString formattedX = formatX( point.x(), format, precision, flags );
+  const QString formattedY = formatY( point.y(), format, precision, flags );
+
+  switch ( order )
+  {
+    case Qgis::CoordinateOrder::Default:
+    case Qgis::CoordinateOrder::XY:
+      return u"%1%2%3"_s.arg( formattedX, QgsCoordinateFormatter::separator(), formattedY );
+
+    case Qgis::CoordinateOrder::YX:
+      return u"%1%2%3"_s.arg( formattedY, QgsCoordinateFormatter::separator(), formattedX );
+  }
+  BUILTIN_UNREACHABLE
 }
 
-QString QgsCoordinateFormatter::asPair( double x, double y, int precision )
+QString QgsCoordinateFormatter::asPair( double x, double y, int precision, Qgis::CoordinateOrder order )
 {
-  QString s = formatAsPair( x, precision );
-  s += QgsCoordinateFormatter::separator();
-  s += formatAsPair( y, precision );
-  return s;
+  const QString formattedX = formatAsPair( x, precision );
+  const QString formattedY = formatAsPair( y, precision );
+
+  switch ( order )
+  {
+    case Qgis::CoordinateOrder::Default:
+    case Qgis::CoordinateOrder::XY:
+      return u"%1%2%3"_s.arg( formattedX, QgsCoordinateFormatter::separator(), formattedY );
+
+    case Qgis::CoordinateOrder::YX:
+      return u"%1%2%3"_s.arg( formattedY, QgsCoordinateFormatter::separator(), formattedX );
+  }
+  BUILTIN_UNREACHABLE
 }
 
 QChar QgsCoordinateFormatter::separator()
 {
-  return QLocale().decimalPoint() == QLatin1Char( ',' ) ? QLatin1Char( ' ' ) : QLatin1Char( ',' );
+  return QLocale().decimalPoint() == ','_L1 ? ' '_L1 : ','_L1;
 }
 
 QString QgsCoordinateFormatter::formatAsPair( double val, int precision )
@@ -98,7 +121,7 @@ QString QgsCoordinateFormatter::formatXAsDegreesMinutesSeconds( double val, int 
     wrappedX = wrappedX + 360.0;
   }
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   int degreesX = int( std::fabs( wrappedX ) );
   const double floatMinutesX = ( std::fabs( wrappedX ) - degreesX ) * 60.0;
@@ -160,10 +183,7 @@ QString QgsCoordinateFormatter::formatXAsDegreesMinutesSeconds( double val, int 
     strSecondsX = QLocale().toString( secondsX, 'f', precision );
   }
 
-  return sign + QLocale().toString( degreesX ) + QChar( 176 ) +
-         minutesX + QChar( 0x2032 ) +
-         strSecondsX + QChar( 0x2033 ) +
-         hemisphere;
+  return sign + QLocale().toString( degreesX ) + QChar( 176 ) + minutesX + QChar( 0x2032 ) + strSecondsX + QChar( 0x2033 ) + hemisphere;
 }
 
 QString QgsCoordinateFormatter::formatYAsDegreesMinutesSeconds( double val, int precision, FormatFlags flags )
@@ -180,7 +200,7 @@ QString QgsCoordinateFormatter::formatYAsDegreesMinutesSeconds( double val, int 
     wrappedY = wrappedY + 180.0;
   }
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   int degreesY = int( std::fabs( wrappedY ) );
   const double floatMinutesY = ( std::fabs( wrappedY ) - degreesY ) * 60.0;
@@ -236,10 +256,7 @@ QString QgsCoordinateFormatter::formatYAsDegreesMinutesSeconds( double val, int 
     strSecondsY = QLocale().toString( secondsY, 'f', precision );
   }
 
-  return sign + QLocale().toString( degreesY ) + QChar( 176 ) +
-         strMinutesY + QChar( 0x2032 ) +
-         strSecondsY + QChar( 0x2033 ) +
-         hemisphere;
+  return sign + QLocale().toString( degreesY ) + QChar( 176 ) + strMinutesY + QChar( 0x2032 ) + strSecondsY + QChar( 0x2033 ) + hemisphere;
 }
 
 QString QgsCoordinateFormatter::formatXAsDegreesMinutes( double val, int precision, FormatFlags flags )
@@ -259,7 +276,7 @@ QString QgsCoordinateFormatter::formatXAsDegreesMinutes( double val, int precisi
   int degreesX = int( std::fabs( wrappedX ) );
   double floatMinutesX = ( std::fabs( wrappedX ) - degreesX ) * 60.0;
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   //make sure rounding to specified precision doesn't create minutes >= 60
   if ( std::round( floatMinutesX * precisionMultiplier ) >= 60 * precisionMultiplier )
@@ -298,11 +315,9 @@ QString QgsCoordinateFormatter::formatXAsDegreesMinutes( double val, int precisi
   //pad minutes with leading digits if required
   const int digits = 2 + ( precision == 0 ? 0 : 1 + precision ); //1 for decimal place if required
   const QString strMinutesX = flags.testFlag( FlagDegreesPadMinutesSeconds ) ? QString( "%1" ).arg( floatMinutesX, digits, 'f', precision, QChar( '0' ) )
-                              : QLocale().toString( floatMinutesX, 'f', precision );
+                                                                             : QLocale().toString( floatMinutesX, 'f', precision );
 
-  return sign + QLocale().toString( degreesX ) + QChar( 176 ) +
-         strMinutesX + QChar( 0x2032 ) +
-         hemisphere;
+  return sign + QLocale().toString( degreesX ) + QChar( 176 ) + strMinutesX + QChar( 0x2032 ) + hemisphere;
 }
 
 QString QgsCoordinateFormatter::formatYAsDegreesMinutes( double val, int precision, FormatFlags flags )
@@ -322,7 +337,7 @@ QString QgsCoordinateFormatter::formatYAsDegreesMinutes( double val, int precisi
   int degreesY = int( std::fabs( wrappedY ) );
   double floatMinutesY = ( std::fabs( wrappedY ) - degreesY ) * 60.0;
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   //make sure rounding to specified precision doesn't create minutes >= 60
   if ( std::round( floatMinutesY * precisionMultiplier ) >= 60 * precisionMultiplier )
@@ -356,11 +371,9 @@ QString QgsCoordinateFormatter::formatYAsDegreesMinutes( double val, int precisi
   //pad minutes with leading digits if required
   const int digits = 2 + ( precision == 0 ? 0 : 1 + precision ); //1 for decimal place if required
   const QString strMinutesY = flags.testFlag( FlagDegreesPadMinutesSeconds ) ? QString( "%1" ).arg( floatMinutesY, digits, 'f', precision, QChar( '0' ) )
-                              : QLocale().toString( floatMinutesY, 'f', precision );
+                                                                             : QLocale().toString( floatMinutesY, 'f', precision );
 
-  return sign + QLocale().toString( degreesY ) + QChar( 176 ) +
-         strMinutesY + QChar( 0x2032 ) +
-         hemisphere;
+  return sign + QLocale().toString( degreesY ) + QChar( 176 ) + strMinutesY + QChar( 0x2032 ) + hemisphere;
 }
 
 QString QgsCoordinateFormatter::formatXAsDegrees( double val, int precision, FormatFlags flags )
@@ -379,7 +392,7 @@ QString QgsCoordinateFormatter::formatXAsDegrees( double val, int precision, For
 
   const double absX = std::fabs( wrappedX );
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   QString hemisphere;
   QString sign;
@@ -428,7 +441,7 @@ QString QgsCoordinateFormatter::formatYAsDegrees( double val, int precision, For
 
   const double absY = std::fabs( wrappedY );
 
-  const int precisionMultiplier = std::pow( 10.0, precision );
+  const double precisionMultiplier = std::pow( 10.0, precision );
 
   QString hemisphere;
   QString sign;

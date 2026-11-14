@@ -16,8 +16,8 @@
 #ifndef QGSGEOMETRYGENERATORSYMBOLLAYER_H
 #define QGSGEOMETRYGENERATORSYMBOLLAYER_H
 
-#include "qgis_core.h"
 #include "qgis.h"
+#include "qgis_core.h"
 #include "qgssymbollayer.h"
 
 class QgsFillSymbol;
@@ -27,6 +27,7 @@ class QgsMarkerSymbol;
 /**
  * \ingroup core
  * \class QgsGeometryGeneratorSymbolLayer
+ * \brief A symbol layer subclass which alters rendered feature shapes through the use of QGIS expressions.
  */
 class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
 {
@@ -34,7 +35,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
     ~QgsGeometryGeneratorSymbolLayer() override;
 
     //! Creates the symbol layer
-    static QgsSymbolLayer *create( const QVariantMap &properties ) SIP_FACTORY;
+    static std::unique_ptr<QgsSymbolLayer> create( const QVariantMap &properties );
 
     QString layerType() const override;
 
@@ -60,8 +61,10 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
     void stopFeatureRender( const QgsFeature &feature, QgsRenderContext &context ) override;
     bool usesMapUnits() const override;
     QColor color() const override;
-    QgsUnitTypes::RenderUnit outputUnit() const override;
+    Qgis::RenderUnit outputUnit() const override;
+    void setOutputUnit( Qgis::RenderUnit unit ) override;
     QgsMapUnitScale mapUnitScale() const override;
+    bool rendersIdenticallyTo( const QgsSymbolLayer *other ) const override;
 
     QgsSymbolLayer *clone() const override SIP_FACTORY;
 
@@ -77,7 +80,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
     /**
      * Gets the expression to generate this geometry.
      */
-    QString geometryExpression() const { return mExpression->expression(); }
+    QString geometryExpression() const;
 
     /**
      * Returns the unit for the geometry expression.
@@ -88,7 +91,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
      * \see setUnits()
      * \since QGIS 3.22
      */
-    QgsUnitTypes::RenderUnit units() const { return mUnits; }
+    Qgis::RenderUnit units() const { return mUnits; }
 
     /**
      * Sets the \a units for the geometry expression.
@@ -99,7 +102,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
      * \see units()
      * \since QGIS 3.22
      */
-    void setUnits( QgsUnitTypes::RenderUnit units ) { mUnits = units;}
+    void setUnits( Qgis::RenderUnit units ) { mUnits = units; }
 
     QgsSymbol *subSymbol() override { return mSymbol; }
 
@@ -127,7 +130,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
      * \param points optional list of original points which are being rendered by the parent symbol (since QGIS 3.22)
      * \param rings optional list of original rings which are being rendered by the parent symbol (since QGIS 3.22)
      */
-    void render( QgsSymbolRenderContext &context, QgsWkbTypes::GeometryType geometryType = QgsWkbTypes::GeometryType::UnknownGeometry, const QPolygonF *points = nullptr, const QVector<QPolygonF> *rings = nullptr );
+    void render( QgsSymbolRenderContext &context, Qgis::GeometryType geometryType = Qgis::GeometryType::Unknown, const QPolygonF *points = nullptr, const QVector<QPolygonF> *rings = nullptr );
 
     void setColor( const QColor &color ) override;
 
@@ -158,9 +161,9 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
     /**
      * The type of the sub symbol.
      */
-    Qgis::SymbolType mSymbolType;
+    Qgis::SymbolType mSymbolType = Qgis::SymbolType::Marker;
 
-    QgsUnitTypes::RenderUnit mUnits = QgsUnitTypes::RenderMapUnits;
+    Qgis::RenderUnit mUnits = Qgis::RenderUnit::MapUnits;
 
     bool mRenderingFeature = false;
     bool mHasRenderedFeature = false;

@@ -16,26 +16,38 @@
  ***************************************************************************/
 
 #include "qgsiconutils.h"
+
 #include "qgsapplication.h"
 #include "qgsmaplayer.h"
+#include "qgspluginlayer.h"
 #include "qgsvectorlayer.h"
 
 #include <QIcon>
+#include <QPainter>
+#include <QPixmap>
+#include <QString>
 
-QIcon QgsIconUtils::iconForWkbType( QgsWkbTypes::Type type )
+using namespace Qt::StringLiterals;
+
+QIcon QgsIconUtils::iconForWkbType( Qgis::WkbType type )
 {
-  const QgsWkbTypes::GeometryType geomType = QgsWkbTypes::geometryType( QgsWkbTypes::Type( type ) );
-  switch ( geomType )
+  const Qgis::GeometryType geomType = QgsWkbTypes::geometryType( type );
+  return iconForGeometryType( geomType );
+}
+
+QIcon QgsIconUtils::iconForGeometryType( Qgis::GeometryType typeGroup )
+{
+  switch ( typeGroup )
   {
-    case QgsWkbTypes::NullGeometry:
+    case Qgis::GeometryType::Null:
       return iconTable();
-    case QgsWkbTypes::PointGeometry:
+    case Qgis::GeometryType::Point:
       return iconPoint();
-    case QgsWkbTypes::LineGeometry:
+    case Qgis::GeometryType::Line:
       return iconLine();
-    case QgsWkbTypes::PolygonGeometry:
+    case Qgis::GeometryType::Polygon:
       return iconPolygon();
-    case QgsWkbTypes::UnknownGeometry:
+    case Qgis::GeometryType::Unknown:
       return iconGeometryCollection();
   }
   return iconDefaultLayer();
@@ -43,97 +55,116 @@ QIcon QgsIconUtils::iconForWkbType( QgsWkbTypes::Type type )
 
 QIcon QgsIconUtils::iconPoint()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconPointLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconPointLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconLine()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconLineLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconLineLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconPolygon()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconPolygonLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconPolygonLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconGeometryCollection()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconGeometryCollectionLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconGeometryCollectionLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconTable()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconTableLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconTableLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconRaster()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconRaster.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconRaster.svg"_s );
 }
 
 QIcon QgsIconUtils::iconMesh()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconMeshLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconMeshLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconVectorTile()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconVectorTileLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconVectorTileLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconPointCloud()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconPointCloudLayer.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconPointCloudLayer.svg"_s );
+}
+
+QIcon QgsIconUtils::iconTiledScene()
+{
+  return QgsApplication::getThemeIcon( u"/mIconTiledSceneLayer.svg"_s );
 }
 
 QIcon QgsIconUtils::iconDefaultLayer()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconLayer.png" ) );
+  return QgsApplication::getThemeIcon( u"/mIconLayer.png"_s );
 }
 
 QIcon QgsIconUtils::iconForLayer( const QgsMapLayer *layer )
 {
-  switch ( layer->type() )
+  if ( layer )
   {
-    case QgsMapLayerType::RasterLayer:
-    case QgsMapLayerType::MeshLayer:
-    case QgsMapLayerType::VectorTileLayer:
-    case QgsMapLayerType::PointCloudLayer:
-    case QgsMapLayerType::PluginLayer:
-    case QgsMapLayerType::AnnotationLayer:
+    switch ( layer->type() )
     {
-      return QgsIconUtils::iconForLayerType( layer->type() );
-    }
-
-    case QgsMapLayerType::VectorLayer:
-    {
-      const QgsVectorLayer *vl = qobject_cast<const QgsVectorLayer *>( layer );
-      if ( !vl )
+      case Qgis::LayerType::Raster:
+      case Qgis::LayerType::Mesh:
+      case Qgis::LayerType::VectorTile:
+      case Qgis::LayerType::PointCloud:
+      case Qgis::LayerType::Annotation:
+      case Qgis::LayerType::Group:
+      case Qgis::LayerType::TiledScene:
       {
-        return QIcon();
+        return QgsIconUtils::iconForLayerType( layer->type() );
       }
-      const QgsWkbTypes::GeometryType geomType = vl->geometryType();
-      switch ( geomType )
+      case Qgis::LayerType::Plugin:
       {
-        case QgsWkbTypes::PointGeometry:
+        if ( const QgsPluginLayer *pl = qobject_cast<const QgsPluginLayer *>( layer ) )
         {
-          return QgsIconUtils::iconPoint();
+          const QIcon icon = pl->icon();
+          if ( !icon.isNull() )
+            return icon;
         }
-        case QgsWkbTypes::PolygonGeometry :
+        // fallback to default icon if layer did not provide a specific icon
+        return QgsIconUtils::iconForLayerType( layer->type() );
+      }
+      case Qgis::LayerType::Vector:
+      {
+        const QgsVectorLayer *vl = qobject_cast<const QgsVectorLayer *>( layer );
+        if ( !vl )
         {
-          return QgsIconUtils::iconPolygon();
+          return QIcon();
         }
-        case QgsWkbTypes::LineGeometry :
+        const Qgis::GeometryType geomType = vl->geometryType();
+        switch ( geomType )
         {
-          return QgsIconUtils::iconLine();
-        }
-        case QgsWkbTypes::NullGeometry :
-        {
-          return QgsIconUtils::iconTable();
-        }
-        case QgsWkbTypes::UnknownGeometry:
-        {
-          return QgsIconUtils::iconGeometryCollection();
+          case Qgis::GeometryType::Point:
+          {
+            return QgsIconUtils::iconPoint();
+          }
+          case Qgis::GeometryType::Polygon:
+          {
+            return QgsIconUtils::iconPolygon();
+          }
+          case Qgis::GeometryType::Line:
+          {
+            return QgsIconUtils::iconLine();
+          }
+          case Qgis::GeometryType::Null:
+          {
+            return QgsIconUtils::iconTable();
+          }
+          case Qgis::GeometryType::Unknown:
+          {
+            return QgsIconUtils::iconGeometryCollection();
+          }
         }
       }
     }
@@ -141,31 +172,58 @@ QIcon QgsIconUtils::iconForLayer( const QgsMapLayer *layer )
   return QIcon();
 }
 
-QIcon QgsIconUtils::iconForLayerType( QgsMapLayerType type )
+QIcon QgsIconUtils::iconForLayerType( Qgis::LayerType type )
 {
   switch ( type )
   {
-    case QgsMapLayerType::RasterLayer:
+    case Qgis::LayerType::Raster:
       return QgsIconUtils::iconRaster();
 
-    case QgsMapLayerType::MeshLayer:
+    case Qgis::LayerType::Mesh:
       return QgsIconUtils::iconMesh();
 
-    case QgsMapLayerType::VectorTileLayer:
+    case Qgis::LayerType::VectorTile:
       return QgsIconUtils::iconVectorTile();
 
-    case QgsMapLayerType::PointCloudLayer:
+    case Qgis::LayerType::PointCloud:
       return QgsIconUtils::iconPointCloud();
 
-    case QgsMapLayerType::VectorLayer:
+    case Qgis::LayerType::TiledScene:
+      return QgsIconUtils::iconTiledScene();
+
+    case Qgis::LayerType::Vector:
       return QgsIconUtils::iconGeometryCollection();
 
-    case QgsMapLayerType::AnnotationLayer:
-      return QgsApplication::getThemeIcon( QStringLiteral( "/mIconAnnotationLayer.svg" ) );
+    case Qgis::LayerType::Annotation:
+      return QgsApplication::getThemeIcon( u"/mIconAnnotationLayer.svg"_s );
 
-    case QgsMapLayerType::PluginLayer:
+    case Qgis::LayerType::Plugin:
+    case Qgis::LayerType::Group:
       break;
   }
   return QIcon();
 }
 
+QIcon QgsIconUtils::addOverlay( const QIcon &icon, const QString &overlayPath, QSize size )
+{
+  if ( icon.isNull() )
+    return icon;
+
+  size = icon.actualSize( size );
+  const qreal dpr = icon.pixmap( size ).devicePixelRatio();
+
+  // Render through a QIcon so the SVG scales correctly and honours device pixel ratio
+  // (QPixmap loaded directly from a file ignores the size argument when no colors are passed).
+  const QIcon overlayIcon( overlayPath );
+
+  QPixmap pixmap( size * dpr );
+  pixmap.setDevicePixelRatio( dpr );
+  pixmap.fill( Qt::transparent );
+
+  QPainter painter( &pixmap );
+  painter.drawPixmap( 0, 0, icon.pixmap( size, dpr ) );
+  painter.drawPixmap( 0, 0, overlayIcon.pixmap( size, dpr ) );
+  painter.end();
+
+  return QIcon( pixmap );
+}

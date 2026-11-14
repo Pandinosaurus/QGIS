@@ -17,12 +17,12 @@
 #ifndef QGSAUTHPKIPATHSEDIT_H
 #define QGSAUTHPKIPATHSEDIT_H
 
-#include <QWidget>
-#include "qgsauthmethodedit.h"
 #include "ui_qgsauthpkipathsedit.h"
 
 #include "qgsauthconfig.h"
+#include "qgsauthmethodedit.h"
 
+#include <QWidget>
 
 class QgsAuthPkiPathsEdit : public QgsAuthMethodEdit, private Ui::QgsAuthPkiPathsEdit
 {
@@ -56,8 +56,6 @@ class QgsAuthPkiPathsEdit : public QgsAuthMethodEdit, private Ui::QgsAuthPkiPath
     void clearPkiPathsCertPath();
     void clearPkiPathsKeyPath();
     void clearPkiPathsKeyPass();
-
-    void chkPkiPathsPassShow_stateChanged( int state );
 
     void btnPkiPathsCert_clicked();
 

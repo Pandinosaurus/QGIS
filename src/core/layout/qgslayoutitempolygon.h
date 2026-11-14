@@ -25,14 +25,12 @@ class QgsFillSymbol;
 /**
  * \ingroup core
  * \brief Layout item for node based polygon shapes.
- * \since QGIS 3.0
  */
-class CORE_EXPORT QgsLayoutItemPolygon: public QgsLayoutNodesItem
+class CORE_EXPORT QgsLayoutItemPolygon : public QgsLayoutNodesItem
 {
     Q_OBJECT
 
   public:
-
     /**
      * Constructor for QgsLayoutItemPolygon for the specified \a layout.
      */
@@ -59,6 +57,7 @@ class CORE_EXPORT QgsLayoutItemPolygon: public QgsLayoutNodesItem
     bool accept( QgsStyleEntityVisitorInterface *visitor ) const override;
     QgsLayoutItem::Flags itemFlags() const override;
     QgsGeometry clipPath() const override;
+    bool isValid() const override;
 
     /**
      * Returns the fill symbol used to draw the shape.
@@ -81,7 +80,6 @@ class CORE_EXPORT QgsLayoutItemPolygon: public QgsLayoutNodesItem
     void _writeXmlStyle( QDomDocument &doc, QDomElement &elmt, const QgsReadWriteContext &context ) const override;
 
   private:
-
     //! QgsSymbol use to draw the shape.
     std::unique_ptr<QgsFillSymbol> mPolygonStyleSymbol;
     //! Create a default symbol.

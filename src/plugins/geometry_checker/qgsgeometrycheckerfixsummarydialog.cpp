@@ -14,28 +14,33 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "qgsgeometrycheckcontext.h"
 #include "qgsgeometrycheckerfixsummarydialog.h"
-#include "qgsgeometrychecker.h"
-#include "qgsgeometrycheck.h"
-#include "qgsfeaturepool.h"
+
 #include "qgisinterface.h"
+#include "qgsfeaturepool.h"
+#include "qgsgeometrycheck.h"
+#include "qgsgeometrycheckcontext.h"
+#include "qgsgeometrychecker.h"
+#include "qgsgeometrycheckerror.h"
 #include "qgsmapcanvas.h"
 #include "qgsvectorlayer.h"
-#include "qgsgeometrycheckerror.h"
 
-QgsGeometryCheckerFixSummaryDialog::QgsGeometryCheckerFixSummaryDialog( const Statistics &stats,
-    QgsGeometryChecker *checker,
-    QWidget *parent )
+#include <QString>
+
+#include "moc_qgsgeometrycheckerfixsummarydialog.cpp"
+
+using namespace Qt::StringLiterals;
+
+QgsGeometryCheckerFixSummaryDialog::QgsGeometryCheckerFixSummaryDialog( const Statistics &stats, QgsGeometryChecker *checker, QWidget *parent )
   : QDialog( parent )
   , mChecker( checker )
 {
   ui.setupUi( this );
 
-  ui.groupBoxFixedErrors->setTitle( tr( "%1 errors were fixed" ).arg( stats.fixedErrors.size() ) );
-  ui.groupBoxNewErrors->setTitle( tr( "%1 new errors were found" ).arg( stats.newErrors.count() ) );
-  ui.groupBoxNotFixed->setTitle( tr( "%1 errors were not fixed" ).arg( stats.failedErrors.count() ) );
-  ui.groupBoxObsoleteErrors->setTitle( tr( "%1 errors are obsolete" ).arg( stats.obsoleteErrors.count() ) );
+  ui.groupBoxFixedErrors->setTitle( tr( "%n error(s) were fixed", nullptr, stats.fixedErrors.size() ) );
+  ui.groupBoxNewErrors->setTitle( tr( "%n new error(s) were found", nullptr, stats.newErrors.count() ) );
+  ui.groupBoxNotFixed->setTitle( tr( "%n error(s) were not fixed", nullptr, stats.failedErrors.count() ) );
+  ui.groupBoxObsoleteErrors->setTitle( tr( "%n error(s) are obsolete", nullptr, stats.obsoleteErrors.count() ) );
 
   for ( QgsGeometryCheckError *error : stats.fixedErrors )
   {
@@ -75,7 +80,7 @@ void QgsGeometryCheckerFixSummaryDialog::addError( QTableWidget *table, QgsGeome
     table->setSortingEnabled( false );
 
   const int prec = 7 - std::floor( std::max( 0., std::log10( std::max( error->location().x(), error->location().y() ) ) ) );
-  const QString posStr = QStringLiteral( "%1, %2" ).arg( error->location().x(), 0, 'f', prec ).arg( error->location().y(), 0, 'f', prec );
+  const QString posStr = u"%1, %2"_s.arg( error->location().x(), 0, 'f', prec ).arg( error->location().y(), 0, 'f', prec );
 
   const int row = table->rowCount();
   table->insertRow( row );
@@ -116,7 +121,7 @@ void QgsGeometryCheckerFixSummaryDialog::onTableSelectionChanged( const QItemSel
   QItemSelectionModel *selModel = qobject_cast<QItemSelectionModel *>( QObject::sender() );
   const QAbstractItemModel *model = selModel->model();
 
-  for ( QTableWidget *table : {ui.tableWidgetFixedErrors, ui.tableWidgetNewErrors, ui.tableWidgetNotFixed, ui.tableWidgetObsoleteErrors} )
+  for ( QTableWidget *table : { ui.tableWidgetFixedErrors, ui.tableWidgetNewErrors, ui.tableWidgetNotFixed, ui.tableWidgetObsoleteErrors } )
   {
     if ( table->selectionModel() != selModel )
     {

@@ -15,6 +15,9 @@
 
 #include "qgsvectortilewriter.h"
 
+#include <memory>
+#include <nlohmann/json.hpp>
+
 #include "qgsdatasourceuri.h"
 #include "qgsfeedback.h"
 #include "qgsjsonutils.h"
@@ -24,14 +27,15 @@
 #include "qgsvectorlayer.h"
 #include "qgsvectortilemvtencoder.h"
 #include "qgsvectortileutils.h"
-
-#include <nlohmann/json.hpp>
+#include "qgsziputils.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QString>
 #include <QUrl>
 
+using namespace Qt::StringLiterals;
 
 QgsVectorTileWriter::QgsVectorTileWriter()
 {
@@ -68,9 +72,9 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
   QgsDataSourceUri dsUri;
   dsUri.setEncodedUri( mDestinationUri );
 
-  QString sourceType = dsUri.param( QStringLiteral( "type" ) );
-  QString sourcePath = dsUri.param( QStringLiteral( "url" ) );
-  if ( sourceType == QLatin1String( "xyz" ) )
+  QString sourceType = dsUri.param( u"type"_s );
+  QString sourcePath = dsUri.param( u"url"_s );
+  if ( sourceType == "xyz"_L1 )
   {
     // remove the initial file:// scheme
     sourcePath = QUrl( sourcePath ).toLocalFile();
@@ -81,9 +85,9 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
       return false;
     }
   }
-  else if ( sourceType == QLatin1String( "mbtiles" ) )
+  else if ( sourceType == "mbtiles"_L1 )
   {
-    mbtiles.reset( new QgsMbTiles( sourcePath ) );
+    mbtiles = std::make_unique<QgsMbTiles>( sourcePath );
   }
   else
   {
@@ -109,8 +113,7 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
     const QgsTileMatrix tileMatrix = QgsTileMatrix::fromTileMatrix( zoomLevel, mRootTileMatrix );
 
     QgsTileRange tileRange = tileMatrix.tileRangeFromExtent( outputExtent );
-    tilesToCreate += ( tileRange.endRow() - tileRange.startRow() + 1 ) *
-                     ( tileRange.endColumn() - tileRange.startColumn() + 1 );
+    tilesToCreate += ( tileRange.endRow() - tileRange.startRow() + 1 ) * ( tileRange.endColumn() - tileRange.startColumn() + 1 );
   }
 
   if ( tilesToCreate == 0 )
@@ -140,7 +143,7 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
 
     // default metadata that we always write (if not written by the client)
     if ( !mMetadata.contains( "name" ) )
-      mbtiles->setMetadataValue( "name",  "unnamed" );  // required by the spec
+      mbtiles->setMetadataValue( "name", "unnamed" ); // required by the spec
     if ( !mMetadata.contains( "minzoom" ) )
       mbtiles->setMetadataValue( "minzoom", QString::number( mMinZoom ) );
     if ( !mMetadata.contains( "maxzoom" ) )
@@ -150,10 +153,9 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
       try
       {
         QgsCoordinateTransform ct( mRootTileMatrix.crs(), QgsCoordinateReferenceSystem( "EPSG:4326" ), mTransformContext );
+        ct.setBallparkTransformsAreAppropriate( true );
         QgsRectangle wgsExtent = ct.transform( outputExtent );
-        QString boundsStr = QString( "%1,%2,%3,%4" )
-                            .arg( wgsExtent.xMinimum() ).arg( wgsExtent.yMinimum() )
-                            .arg( wgsExtent.xMaximum() ).arg( wgsExtent.yMaximum() );
+        QString boundsStr = QString( "%1,%2,%3,%4" ).arg( wgsExtent.xMinimum() ).arg( wgsExtent.yMinimum() ).arg( wgsExtent.xMaximum() ).arg( wgsExtent.yMaximum() );
         mbtiles->setMetadataValue( "bounds", boundsStr );
       }
       catch ( const QgsCsException & )
@@ -162,7 +164,7 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
       }
     }
     if ( !mMetadata.contains( "crs" ) )
-      mbtiles->setMetadataValue( "crs",  mRootTileMatrix.crs().authid() );
+      mbtiles->setMetadataValue( "crs", mRootTileMatrix.crs().authid() );
   }
 
   int tilesCreated = 0;
@@ -181,8 +183,7 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
 
         for ( const Layer &layer : std::as_const( mLayers ) )
         {
-          if ( ( layer.minZoom() >= 0 && zoomLevel < layer.minZoom() ) ||
-               ( layer.maxZoom() >= 0 && zoomLevel > layer.maxZoom() ) )
+          if ( ( layer.minZoom() >= 0 && zoomLevel < layer.minZoom() ) || ( layer.maxZoom() >= 0 && zoomLevel > layer.maxZoom() ) )
             continue;
 
           encoder.addLayer( layer.layer(), feedback, layer.filterExpression(), layer.layerName() );
@@ -208,15 +209,15 @@ bool QgsVectorTileWriter::writeTiles( QgsFeedback *feedback )
           continue;
         }
 
-        if ( sourceType == QLatin1String( "xyz" ) )
+        if ( sourceType == "xyz"_L1 )
         {
           if ( !writeTileFileXYZ( sourcePath, tileID, tileMatrix, tileData ) )
-            return false;  // error message already set
+            return false; // error message already set
         }
-        else  // mbtiles
+        else // mbtiles
         {
           QByteArray gzipTileData;
-          QgsMbTiles::encodeGzip( tileData, gzipTileData );
+          QgsZipUtils::encodeGzip( tileData, gzipTileData );
           int rowTMS = pow( 2, tileID.zoomLevel() ) - tileID.row() - 1;
           mbtiles->setTileData( tileID.zoomLevel(), tileID.column(), rowTMS, gzipTileData );
         }
@@ -235,6 +236,7 @@ QgsRectangle QgsVectorTileWriter::fullExtent() const
   {
     QgsVectorLayer *vl = layer.layer();
     QgsCoordinateTransform ct( vl->crs(), mRootTileMatrix.crs(), mTransformContext );
+    ct.setBallparkTransformsAreAppropriate( true );
     try
     {
       QgsRectangle r = ct.transformBoundingBox( vl->extent() );
@@ -242,7 +244,7 @@ QgsRectangle QgsVectorTileWriter::fullExtent() const
     }
     catch ( const QgsCsException & )
     {
-      QgsDebugMsg( "Failed to reproject layer extent to destination CRS" );
+      QgsDebugError( "Failed to reproject layer extent to destination CRS" );
     }
   }
   return extent;
@@ -277,7 +279,7 @@ bool QgsVectorTileWriter::writeTileFileXYZ( const QString &sourcePath, QgsTileXY
 }
 
 
-QString QgsVectorTileWriter::mbtilesJsonSchema()
+QString QgsVectorTileWriter::mbtilesJsonSchema() const
 {
   QVariantList arrayLayers;
   for ( const Layer &layer : std::as_const( mLayers ) )
@@ -289,12 +291,12 @@ QString QgsVectorTileWriter::mbtilesJsonSchema()
     for ( const QgsField &field : fields )
     {
       QString fieldTypeStr;
-      if ( field.type() == QVariant::Bool )
-        fieldTypeStr = QStringLiteral( "Boolean" );
-      else if ( field.type() == QVariant::Int || field.type() == QVariant::Double )
-        fieldTypeStr = QStringLiteral( "Number" );
+      if ( field.type() == QMetaType::Type::Bool )
+        fieldTypeStr = u"Boolean"_s;
+      else if ( field.type() == QMetaType::Type::Int || field.type() == QMetaType::Type::Double )
+        fieldTypeStr = u"Number"_s;
       else
-        fieldTypeStr = QStringLiteral( "String" );
+        fieldTypeStr = u"String"_s;
 
       fieldsObj[field.name()] = fieldTypeStr;
     }
@@ -322,8 +324,7 @@ QByteArray QgsVectorTileWriter::writeSingleTile( QgsTileXYZ tileID, QgsFeedback 
 
   for ( const QgsVectorTileWriter::Layer &layer : std::as_const( mLayers ) )
   {
-    if ( ( layer.minZoom() >= 0 && zoomLevel < layer.minZoom() ) ||
-         ( layer.maxZoom() >= 0 && zoomLevel > layer.maxZoom() ) )
+    if ( ( layer.minZoom() >= 0 && zoomLevel < layer.minZoom() ) || ( layer.maxZoom() >= 0 && zoomLevel > layer.maxZoom() ) )
       continue;
 
     encoder.addLayer( layer.layer(), feedback, layer.filterExpression(), layer.layerName() );

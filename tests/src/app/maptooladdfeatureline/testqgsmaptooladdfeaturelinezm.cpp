@@ -13,30 +13,33 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "qgstest.h"
-
 #include "qgisapp.h"
 #include "qgsadvanceddigitizingdockwidget.h"
 #include "qgsgeometry.h"
 #include "qgsmapcanvas.h"
 #include "qgsmapcanvassnappingutils.h"
-#include "qgssnappingconfig.h"
-#include "qgsmaptooladdfeature.h"
 #include "qgsmapcanvastracer.h"
+#include "qgsmapmouseevent.h"
+#include "qgsmaptooladdfeature.h"
 #include "qgsproject.h"
 #include "qgssettings.h"
 #include "qgssettingsregistrycore.h"
+#include "qgssnappingconfig.h"
+#include "qgstest.h"
 #include "qgsvectorlayer.h"
 #include "qgswkbtypes.h"
-#include "qgsmapmouseevent.h"
 #include "testqgsmaptoolutils.h"
+
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 bool operator==( const QgsGeometry &g1, const QgsGeometry &g2 )
 {
   if ( g1.isNull() && g2.isNull() )
     return true;
   else
-    return g1.equals( g2 );
+    return g1.isExactlyEqual( g2 );
 }
 
 namespace QTest
@@ -47,7 +50,7 @@ namespace QTest
     QByteArray ba = geom.asWkt().toLatin1();
     return qstrdup( ba.data() );
   }
-}
+} // namespace QTest
 
 
 /**
@@ -61,8 +64,8 @@ class TestQgsMapToolAddFeatureLineZM : public QObject
     TestQgsMapToolAddFeatureLineZM();
 
   private slots:
-    void initTestCase();// will be called before the first testfunction is executed.
-    void cleanupTestCase();// will be called after the last testfunction was executed.
+    void initTestCase();    // will be called before the first testfunction is executed.
+    void cleanupTestCase(); // will be called after the last testfunction was executed.
 
     void testZM();
 
@@ -84,10 +87,6 @@ void TestQgsMapToolAddFeatureLineZM::initTestCase()
   QgsApplication::init();
   QgsApplication::initQgis();
 
-  // Set up the QSettings environment
-  QCoreApplication::setOrganizationName( QStringLiteral( "QGIS" ) );
-  QCoreApplication::setOrganizationDomain( QStringLiteral( "qgis.org" ) );
-  QCoreApplication::setApplicationName( QStringLiteral( "QGIS-TEST" ) );
   QgsSettings settings;
   settings.clear();
 
@@ -95,10 +94,10 @@ void TestQgsMapToolAddFeatureLineZM::initTestCase()
 
   mCanvas = new QgsMapCanvas();
 
-  mCanvas->setDestinationCrs( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:27700" ) ) );
+  mCanvas->setDestinationCrs( QgsCoordinateReferenceSystem( u"EPSG:27700"_s ) );
 
   // make testing layers
-  mLayerLineZM = new QgsVectorLayer( QStringLiteral( "LineStringZM?crs=EPSG:27700" ), QStringLiteral( "layer line M" ), QStringLiteral( "memory" ) );
+  mLayerLineZM = new QgsVectorLayer( u"LineStringZM?crs=EPSG:27700"_s, u"layer line M"_s, u"memory"_s );
   QVERIFY( mLayerLineZM->isValid() );
   QgsProject::instance()->addMapLayers( QList<QgsMapLayer *>() << mLayerLineZM );
 
@@ -109,7 +108,7 @@ void TestQgsMapToolAddFeatureLineZM::initTestCase()
 
   mLayerLineZM->startEditing();
   mLayerLineZM->addFeature( lineF );
-  QCOMPARE( mLayerLineZM->featureCount(), ( long )1 );
+  QCOMPARE( mLayerLineZM->featureCount(), ( long ) 1 );
 
   mCanvas->setFrameStyle( QFrame::NoFrame );
   mCanvas->resize( 512, 512 );
@@ -124,7 +123,7 @@ void TestQgsMapToolAddFeatureLineZM::initTestCase()
   mCanvas->setSnappingUtils( new QgsMapCanvasSnappingUtils( mCanvas, this ) );
 
   // create the tool
-  mCaptureTool = new QgsMapToolAddFeature( mCanvas, /*mAdvancedDigitizingDockWidget, */ QgsMapToolCapture::CaptureLine );
+  mCaptureTool = new QgsMapToolAddFeature( mCanvas, QgisApp::instance()->cadDockWidget(), QgsMapToolCapture::CaptureLine );
 
   mCanvas->setMapTool( mCaptureTool );
 
@@ -147,9 +146,9 @@ void TestQgsMapToolAddFeatureLineZM::testZM()
   mCanvas->setCurrentLayer( mLayerLineZM );
 
   // test with default M value = 333
-  QgsSettingsRegistryCore::settingsDigitizingDefaultMValue.setValue( 333 );
+  QgsSettingsRegistryCore::settingsDigitizingDefaultMValue->setValue( 333 );
   // test with default Z value = 123
-  QgsSettingsRegistryCore::settingsDigitizingDefaultZValue.setValue( 123 );
+  QgsSettingsRegistryCore::settingsDigitizingDefaultZValue->setValue( 123 );
 
 
   QSet<QgsFeatureId> oldFids = utils.existingFeatureIds();
@@ -166,9 +165,9 @@ void TestQgsMapToolAddFeatureLineZM::testZM()
   mLayerLineZM->undoStack()->undo();
 
   // test with default M value = 222
-  QgsSettingsRegistryCore::settingsDigitizingDefaultMValue.setValue( 222 );
+  QgsSettingsRegistryCore::settingsDigitizingDefaultMValue->setValue( 222 );
   // test with default z value = 456
-  QgsSettingsRegistryCore::settingsDigitizingDefaultZValue.setValue( 456 );
+  QgsSettingsRegistryCore::settingsDigitizingDefaultZValue->setValue( 456 );
 
   oldFids = utils.existingFeatureIds();
   utils.mouseClick( 4, 0, Qt::LeftButton );
@@ -182,7 +181,6 @@ void TestQgsMapToolAddFeatureLineZM::testZM()
   QCOMPARE( mLayerLineZM->getFeature( newFid ).geometry(), QgsGeometry::fromWkt( wkt ) );
 
   mLayerLineZM->undoStack()->undo();
-
 }
 
 QGSTEST_MAIN( TestQgsMapToolAddFeatureLineZM )

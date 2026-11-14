@@ -20,9 +20,9 @@
 
 #include "qgis_core.h"
 #include "qgis_sip.h"
-#include "qgsrange.h"
-#include "qgsinterval.h"
 #include "qgsdataprovidertemporalcapabilities.h"
+#include "qgsinterval.h"
+#include "qgsrange.h"
 
 /**
  * \class QgsRasterDataProviderTemporalCapabilities
@@ -38,13 +38,26 @@
 class CORE_EXPORT QgsRasterDataProviderTemporalCapabilities : public QgsDataProviderTemporalCapabilities
 {
   public:
-
     /**
      * Constructor for QgsRasterDataProviderTemporalProperties.
      *
      * The \a enabled argument specifies whether the data provider has temporal capabilities.
      */
     QgsRasterDataProviderTemporalCapabilities( bool enabled = false );
+
+    /**
+     * Returns the capability flags for the provider.
+     *
+     * \since QGIS 3.28
+     */
+    Qgis::RasterTemporalCapabilityFlags flags() const;
+
+    /**
+     * Sets the capability flags for the provider.
+     *
+     * \since QGIS 3.28
+     */
+    void setFlags( Qgis::RasterTemporalCapabilityFlags flags );
 
     /**
      * Returns the desired method to use when resolving a temporal interval to matching
@@ -153,7 +166,6 @@ class CORE_EXPORT QgsRasterDataProviderTemporalCapabilities : public QgsDataProv
     void setRequestedTemporalRange( const QgsDateTimeRange &range ) SIP_SKIP;
 
   private:
-
     /**
      * Represents available data provider datetime range.
      *
@@ -183,9 +195,10 @@ class CORE_EXPORT QgsRasterDataProviderTemporalCapabilities : public QgsDataProv
     //! Interval handling method
     Qgis::TemporalIntervalMatchMethod mIntervalMatchMethod = Qgis::TemporalIntervalMatchMethod::MatchUsingWholeRange;
 
+    Qgis::RasterTemporalCapabilityFlags mFlags;
+
     friend class QgsRasterLayerRenderer;
     friend class TestQgsRasterDataProviderTemporalCapabilities;
-
 };
 
 #endif // QGSRASTERDATAPROVIDERTEMPORALCAPABILITIES_H

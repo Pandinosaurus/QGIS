@@ -17,13 +17,12 @@
 #ifndef QGSAUTHBASICEDIT_H
 #define QGSAUTHBASICEDIT_H
 
-#include <QWidget>
-
-#include "qgsauthmethodedit.h"
 #include "ui_qgsauthbasicedit.h"
 
 #include "qgsauthconfig.h"
+#include "qgsauthmethodedit.h"
 
+#include <QWidget>
 
 class QgsAuthBasicEdit : public QgsAuthMethodEdit, private Ui::QgsAuthBasicEdit
 {
@@ -45,8 +44,6 @@ class QgsAuthBasicEdit : public QgsAuthMethodEdit, private Ui::QgsAuthBasicEdit
 
   private slots:
     void leUsername_textChanged( const QString &txt );
-
-    void chkPasswordShow_stateChanged( int state );
 
   private:
     QgsStringMap mConfigMap;

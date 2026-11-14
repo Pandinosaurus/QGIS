@@ -15,13 +15,16 @@
 #ifndef QGSWMSDATAITEMS_H
 #define QGSWMSDATAITEMS_H
 
+#include "qgsconnectionsitem.h"
 #include "qgsdatacollectionitem.h"
-#include "qgslayeritem.h"
 #include "qgsdataitemprovider.h"
 #include "qgsdatasourceuri.h"
+#include "qgslayeritem.h"
 #include "qgswmsprovider.h"
-#include "qgsgeonodeconnection.h"
-#include "qgsconnectionsitem.h"
+
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 class QgsWmsCapabilitiesDownload;
 
@@ -34,6 +37,8 @@ class QgsWMSConnectionItem : public QgsDataCollectionItem
 
     QVector<QgsDataItem *> createChildren() override;
     bool equal( const QgsDataItem *other ) override;
+
+    using QgsDataCollectionItem::refresh;
     void refresh() override;
 
   public slots:
@@ -52,9 +57,7 @@ class QgsWMSConnectionItem : public QgsDataCollectionItem
 class QgsWMSItemBase
 {
   public:
-    QgsWMSItemBase( const QgsWmsCapabilitiesProperty &capabilitiesProperty,
-                    const QgsDataSourceUri &dataSourceUri,
-                    const QgsWmsLayerProperty &layerProperty );
+    QgsWMSItemBase( const QgsWmsCapabilitiesProperty &capabilitiesProperty, const QgsDataSourceUri &dataSourceUri, const QgsWmsLayerProperty &layerProperty );
 
     /**
      * Returns the uri for the wms dataitem.
@@ -94,10 +97,9 @@ class QgsWMSLayerCollectionItem : public QgsDataCollectionItem, public QgsWMSIte
 {
     Q_OBJECT
   public:
-    QgsWMSLayerCollectionItem( QgsDataItem *parent, QString name, QString path,
-                               const QgsWmsCapabilitiesProperty &capabilitiesProperty,
-                               const QgsDataSourceUri &dataSourceUri,
-                               const QgsWmsLayerProperty &layerProperty );
+    QgsWMSLayerCollectionItem(
+      QgsDataItem *parent, QString name, QString path, const QgsWmsCapabilitiesProperty &capabilitiesProperty, const QgsDataSourceUri &dataSourceUri, const QgsWmsLayerProperty &layerProperty
+    );
 
     bool equal( const QgsDataItem *other ) override;
 
@@ -120,36 +122,45 @@ class QgsWMSLayerItem : public QgsLayerItem, public QgsWMSItemBase
 {
     Q_OBJECT
   public:
-    QgsWMSLayerItem( QgsDataItem *parent, QString name, QString path,
-                     const QgsWmsCapabilitiesProperty &capabilitiesProperty,
-                     const QgsDataSourceUri &dataSourceUri,
-                     const QgsWmsLayerProperty &layerProperty );
+    QgsWMSLayerItem(
+      QgsDataItem *parent, QString name, QString path, const QgsWmsCapabilitiesProperty &capabilitiesProperty, const QgsDataSourceUri &dataSourceUri, const QgsWmsLayerProperty &layerProperty
+    );
 
     bool equal( const QgsDataItem *other ) override;
-
 };
 
 class QgsWMTSLayerItem : public QgsLayerItem
 {
     Q_OBJECT
   public:
-    QgsWMTSLayerItem( QgsDataItem *parent,
-                      const QString &name,
-                      const QString &path,
-                      const QgsDataSourceUri &dataSourceUri,
-                      const QString &id,
-                      const QString &format,
-                      const QString &style,
-                      const QString &tileMatrixSet,
-                      const QString &crs,
-                      const QString &title );
+    QgsWMTSLayerItem(
+      QgsDataItem *parent,
+      const QString &name,
+      const QString &path,
+      const QgsDataSourceUri &dataSourceUri,
+      const QString &id,
+      const QString &dimension,
+      const QString &dimensionValue,
+      const QString &format,
+      const QString &style,
+      const QString &tileMatrixSet,
+      const QString &crs,
+      const QString &title
+    );
 
     QString createUri();
     QString layerName() const override { return mTitle; }
 
   private:
     QgsDataSourceUri mDataSourceUri;
-    QString mId, mFormat, mStyle, mTileMatrixSet, mCrs, mTitle;
+    QString mId;
+    QString mDimension;
+    QString mDimensionValue;
+    QString mFormat;
+    QString mStyle;
+    QString mTileMatrixSet;
+    QString mCrs;
+    QString mTitle;
 };
 
 class QgsWMSRootItem : public QgsConnectionsRootItem
@@ -179,13 +190,10 @@ class QgsWMTSRootItem : public QgsConnectionsRootItem
 class QgsWmsDataItemProvider : public QgsDataItemProvider
 {
   public:
-    QString name() override { return QStringLiteral( "WMS" ); }
+    QString name() override { return u"WMS"_s; }
     QString dataProviderKey() const override;
-    int capabilities() const override { return QgsDataProvider::Net; }
-
+    Qgis::DataItemProviderCapabilities capabilities() const override { return Qgis::DataItemProviderCapability::NetworkSources; }
     QgsDataItem *createDataItem( const QString &path, QgsDataItem *parentItem ) override;
-
-    QVector<QgsDataItem *> createDataItems( const QString &path, QgsDataItem *parentItem ) override;
 };
 
 
@@ -199,7 +207,6 @@ class QgsXyzTileRootItem : public QgsConnectionsRootItem
     QVector<QgsDataItem *> createChildren() override;
 
     QVariant sortKey() const override { return 8; }
-
 };
 
 //! Item implementation for XYZ tile layers
@@ -208,7 +215,6 @@ class QgsXyzLayerItem : public QgsLayerItem
     Q_OBJECT
   public:
     QgsXyzLayerItem( QgsDataItem *parent, QString name, QString path, const QString &encodedUri );
-
 };
 
 
@@ -218,11 +224,8 @@ class QgsXyzTileDataItemProvider : public QgsDataItemProvider
   public:
     QString name() override;
     QString dataProviderKey() const override;
-    int capabilities() const override;
-
+    Qgis::DataItemProviderCapabilities capabilities() const override;
     QgsDataItem *createDataItem( const QString &path, QgsDataItem *parentItem ) override;
-
-    QVector<QgsDataItem *> createDataItems( const QString &path, QgsDataItem *parentItem ) override;
 };
 
 

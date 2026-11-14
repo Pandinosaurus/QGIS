@@ -16,16 +16,14 @@
 #ifndef QGSABSTRACTPROVIDERCONNECTION_H
 #define QGSABSTRACTPROVIDERCONNECTION_H
 
+#include "qgis_core.h"
+#include "qgis_sip.h"
+
 #include <QString>
 #include <QVariantMap>
 
-#include "qgis_core.h"
-#include "qgis_sip.h"
-#include "qgsdatasourceuri.h"
-#include "qgsexception.h"
-
 /**
- * \brief The QgsAbstractProviderConnection provides an interface for data provider connections.
+ * \brief An interface for data provider connections.
  *
  * Connections objects can be constructed loading them from the connections stored
  * in the settings by passing the connection name.
@@ -43,7 +41,6 @@
  */
 class CORE_EXPORT QgsAbstractProviderConnection
 {
-
 #ifdef SIP_RUN
     SIP_CONVERT_TO_SUBCLASS_CODE
     if ( dynamic_cast<QgsAbstractDatabaseProviderConnection *>( sipCpp ) != NULL )
@@ -58,7 +55,7 @@ class CORE_EXPORT QgsAbstractProviderConnection
     {
       sipType = 0;
     }
-    SIP_END
+  SIP_END
 #endif
 
   public:
@@ -115,10 +112,8 @@ class CORE_EXPORT QgsAbstractProviderConnection
     void setConfiguration( const QVariantMap &configuration );
 
   private:
-
     QString mUri;
     QVariantMap mConfiguration;
-
 };
 
 #endif // QGSABSTRACTPROVIDERCONNECTION_H

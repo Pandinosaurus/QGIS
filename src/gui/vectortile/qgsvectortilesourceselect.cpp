@@ -15,19 +15,27 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "qgshelp.h"
-#include "qgsgui.h"
-#include "qgsmanageconnectionsdialog.h"
 #include "qgsvectortilesourceselect.h"
+
+#include "qgsarcgisvectortileconnectiondialog.h"
+#include "qgsgui.h"
+#include "qgshelp.h"
+#include "qgsmanageconnectionsdialog.h"
+#include "qgsprovidermetadata.h"
+#include "qgsproviderutils.h"
 #include "qgsvectortileconnection.h"
 #include "qgsvectortileconnectiondialog.h"
-#include "qgsarcgisvectortileconnectiondialog.h"
 
+#include <QAction>
 #include <QFileDialog>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QMenu>
-#include <QAction>
+#include <QString>
+
+#include "moc_qgsvectortilesourceselect.cpp"
+
+using namespace Qt::StringLiterals;
 
 ///@cond PRIVATE
 
@@ -36,10 +44,23 @@ QgsVectorTileSourceSelect::QgsVectorTileSourceSelect( QWidget *parent, Qt::Windo
 {
   setupUi( this );
 
-  setWindowTitle( tr( "Add Vector Tile Layer" ) );
-  mConnectionsGroupBox->setTitle( tr( "Vector Tile Connections" ) );
-
   QgsGui::enableAutoGeometryRestore( this );
+
+  setWindowTitle( tr( "Add Vector Tile Layer" ) );
+
+  mRadioSourceService->setChecked( true );
+  mStackedWidget->setCurrentIndex( 1 );
+
+  connect( mRadioSourceFile, &QRadioButton::toggled, this, [this] {
+    mStackedWidget->setCurrentIndex( 0 );
+
+    emit enableButtons( !mFileWidget->filePath().isEmpty() );
+  } );
+  connect( mRadioSourceService, &QRadioButton::toggled, this, [this] {
+    mStackedWidget->setCurrentIndex( 1 );
+
+    emit enableButtons( !cmbConnections->currentText().isEmpty() );
+  } );
 
   btnNew->setPopupMode( QToolButton::InstantPopup );
   QMenu *newMenu = new QMenu( btnNew );
@@ -63,6 +84,12 @@ QgsVectorTileSourceSelect::QgsVectorTileSourceSelect( QWidget *parent, Qt::Windo
   setupButtons( buttonBox );
 
   populateConnectionList();
+
+  mFileWidget->setDialogTitle( tr( "Open Vector Tile Dataset" ) );
+  mFileWidget->setFilter( QgsProviderRegistry::instance()->fileVectorTileFilters() );
+  mFileWidget->setStorageMode( QgsFileWidget::GetFile );
+  mFileWidget->setOptions( QFileDialog::HideNameFilterDetails );
+  connect( mFileWidget, &QgsFileWidget::fileChanged, this, [this]( const QString &path ) { emit enableButtons( !path.isEmpty() ); } );
 }
 
 void QgsVectorTileSourceSelect::btnNew_clicked()
@@ -72,6 +99,8 @@ void QgsVectorTileSourceSelect::btnNew_clicked()
   {
     QgsVectorTileProviderConnection::addConnection( nc.connectionName(), QgsVectorTileProviderConnection::decodedUri( nc.connectionUri() ) );
     populateConnectionList();
+    QgsVectorTileProviderConnection::setSelectedConnection( nc.connectionName() );
+    setConnectionListPosition();
     emit connectionsChanged();
   }
 }
@@ -125,8 +154,7 @@ void QgsVectorTileSourceSelect::btnEdit_clicked()
 
 void QgsVectorTileSourceSelect::btnDelete_clicked()
 {
-  const QString msg = tr( "Are you sure you want to remove the %1 connection and all associated settings?" )
-                      .arg( cmbConnections->currentText() );
+  const QString msg = tr( "Are you sure you want to remove the %1 connection and all associated settings?" ).arg( cmbConnections->currentText() );
   if ( QMessageBox::Yes != QMessageBox::question( this, tr( "Confirm Delete" ), msg, QMessageBox::Yes | QMessageBox::No ) )
     return;
 
@@ -144,8 +172,7 @@ void QgsVectorTileSourceSelect::btnSave_clicked()
 
 void QgsVectorTileSourceSelect::btnLoad_clicked()
 {
-  const QString fileName = QFileDialog::getOpenFileName( this, tr( "Load Connections" ), QDir::homePath(),
-                           tr( "XML files (*.xml *.XML)" ) );
+  const QString fileName = QFileDialog::getOpenFileName( this, tr( "Load Connections" ), QDir::homePath(), tr( "XML files (*.xml *.XML)" ) );
   if ( fileName.isEmpty() )
   {
     return;
@@ -158,8 +185,36 @@ void QgsVectorTileSourceSelect::btnLoad_clicked()
 
 void QgsVectorTileSourceSelect::addButtonClicked()
 {
-  const QString uri = QgsVectorTileProviderConnection::encodedUri( QgsVectorTileProviderConnection::connection( cmbConnections->currentText() ) );
-  emit addVectorTileLayer( uri, cmbConnections->currentText() );
+  if ( mRadioSourceService->isChecked() )
+  {
+    const QString uri = QgsVectorTileProviderConnection::encodedUri( QgsVectorTileProviderConnection::connection( cmbConnections->currentText() ) );
+    Q_NOWARN_DEPRECATED_PUSH
+    emit addVectorTileLayer( uri, cmbConnections->currentText() );
+    Q_NOWARN_DEPRECATED_POP
+    emit addLayer( Qgis::LayerType::VectorTile, uri, cmbConnections->currentText(), QString() );
+  }
+  else if ( mRadioSourceFile->isChecked() )
+  {
+    const QString filePath = mFileWidget->filePath();
+    const QList<QgsProviderRegistry::ProviderCandidateDetails> providers = QgsProviderRegistry::instance()->preferredProvidersForUri( filePath );
+    QString providerKey;
+    for ( const QgsProviderRegistry::ProviderCandidateDetails &details : providers )
+    {
+      if ( details.layerTypes().contains( Qgis::LayerType::VectorTile ) )
+      {
+        providerKey = details.metadata()->key();
+      }
+    }
+
+    QVariantMap parts;
+    parts.insert( u"path"_s, filePath );
+    const QString uri = QgsProviderRegistry::instance()->encodeUri( providerKey, parts );
+
+    Q_NOWARN_DEPRECATED_PUSH
+    emit addVectorTileLayer( uri, QgsProviderUtils::suggestLayerNameFromFilePath( filePath ) );
+    Q_NOWARN_DEPRECATED_POP
+    emit addLayer( Qgis::LayerType::VectorTile, uri, cmbConnections->currentText(), QString() );
+  }
 }
 
 void QgsVectorTileSourceSelect::populateConnectionList()
@@ -202,7 +257,7 @@ void QgsVectorTileSourceSelect::cmbConnections_currentTextChanged( const QString
 
 void QgsVectorTileSourceSelect::showHelp()
 {
-  QgsHelp::openHelp( QStringLiteral( "managing_data_source/opening_data.html#using-vector-tiles-services" ) );
+  QgsHelp::openHelp( u"managing_data_source/opening_data.html#using-vector-tiles-services"_s );
 }
 
 ///@endcond

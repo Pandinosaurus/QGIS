@@ -19,16 +19,16 @@
 #define QGSGEOMETRYOPTIONS_H
 
 #include "qgis_core.h"
-#include "qgis_sip.h"
 #include "qgsgeometry.h"
-#include "qgssettingsentry.h"
 
 #include <QObject>
+
+class QgsSettingsEntryString;
 
 /**
  * \ingroup core
  *
- * \brief The QgsGeometryOptions class contains options to automatically adjust geometries to
+ * \brief Contains options to automatically adjust geometries to
  * constraints on a layer.
  *
  * \since QGIS 3.4
@@ -38,7 +38,6 @@ class CORE_EXPORT QgsGeometryOptions : public QObject
     Q_OBJECT
 
   public:
-
     /**
      * Create a new QgsGeometryOptions object.
      */
@@ -134,7 +133,7 @@ class CORE_EXPORT QgsGeometryOptions : public QObject
 
 #ifndef SIP_RUN
     //! Settings entry search path for templates
-    static const inline QgsSettingsEntryString settingsGeometryValidationDefaultChecks = QgsSettingsEntryString( QStringLiteral( "geometry_validation/default_checks" ), QgsSettings::NoSection, QString() );
+    static const QgsSettingsEntryString *settingsGeometryValidationDefaultChecks;
 #endif
 
   signals:
@@ -170,7 +169,6 @@ class CORE_EXPORT QgsGeometryOptions : public QObject
     void geometryPrecisionChanged();
 
   private:
-
     /**
      * Automatically remove duplicate nodes on all geometries which are edited on this layer.
      *

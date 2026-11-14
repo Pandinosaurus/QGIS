@@ -16,23 +16,21 @@
 #ifndef QGSOGRDBTABLEMODEL_H
 #define QGSOGRDBTABLEMODEL_H
 
-#include "qgis.h"
-
 #include <type_traits>
-#include "qgslayeritem.h"
+
+#include "qgis.h"
 #include "qgis_sip.h"
 #include "qgsabstractdbtablemodel.h"
 
+#define SIP_NO_FILE
 
 ///@cond PRIVATE
-#define SIP_NO_FILE
 
 class QgsOgrDbTableModel : public QgsAbstractDbTableModel
 {
     Q_OBJECT
 
   public:
-
     QgsOgrDbTableModel( QObject *parent = nullptr );
 
     QStringList columns() const override;
@@ -43,22 +41,24 @@ class QgsOgrDbTableModel : public QgsAbstractDbTableModel
     void setGeometryTypesForTable( const QString &table, const QString &attribute, const QString &type );
 
     //! Adds entry for one database table to the model
-    void addTableEntry( const Qgis::BrowserLayerType &layerType, const QString &tableName, const QString &uri, const QString &geometryColName, const QString &geometryType, const QString &sql );
+    void addTableEntry( Qgis::BrowserLayerType layerType, const QString &tableName, const QString &uri, const QString &geometryColName, const QString &geometryType, const QString &sql );
 
     //! Sets an sql statement that belongs to a cell specified by a model index
     void setSql( const QModelIndex &index, const QString &sql ) override;
 
     //! Returns the number of tables in the model
-    int tableCount() const
+    int tableCount() const { return mTableCount; }
+
+    enum Columns
     {
-      return mTableCount;
-    }
+      DbtmTable = 0,
+      DbtmType,
+      DbtmGeomCol,
+      DbtmSql,
+    };
 
     //! Sets the DB full path
-    void setPath( const QString &path )
-    {
-      mPath = path;
-    }
+    void setPath( const QString &path ) { mPath = path; }
 
   private:
     //! Number of tables in the model
@@ -66,10 +66,10 @@ class QgsOgrDbTableModel : public QgsAbstractDbTableModel
     QString mPath;
     QStringList mColumns;
 
-    QIcon iconForType( QgsWkbTypes::Type type ) const;
-    QString displayStringForType( QgsWkbTypes::Type type ) const;
+    QIcon iconForType( Qgis::WkbType type ) const;
+    QString displayStringForType( Qgis::WkbType type ) const;
     //! Returns qgis wkbtype from database typename
-    QgsWkbTypes::Type qgisTypeFromDbType( const QString &dbType ) const;
+    Qgis::WkbType qgisTypeFromDbType( const QString &dbType ) const;
 };
 
 ///@endcond

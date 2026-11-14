@@ -16,17 +16,25 @@
  ***************************************************************************/
 
 #include "qgsalllayersfeatureslocatorfilter.h"
-#include "qgssettings.h"
-#include "qgsproject.h"
-#include "qgsvectorlayer.h"
+
+#include <memory>
+
+#include "qgisapp.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsfeatureaction.h"
 #include "qgsfeedback.h"
 #include "qgsiconutils.h"
-#include "qgisapp.h"
 #include "qgsmapcanvas.h"
+#include "qgsproject.h"
+#include "qgssettings.h"
+#include "qgsvectorlayer.h"
 
 #include <QSpinBox>
+#include <QString>
+
+#include "moc_qgsalllayersfeatureslocatorfilter.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsAllLayersFeaturesLocatorFilter::QgsAllLayersFeaturesLocatorFilter( QObject *parent )
   : QgsLocatorFilter( parent )
@@ -53,7 +61,7 @@ QStringList QgsAllLayersFeaturesLocatorFilter::prepare( const QString &string, c
   const QMap<QString, QgsMapLayer *> layers = QgsProject::instance()->mapLayers();
   for ( auto it = layers.constBegin(); it != layers.constEnd(); ++it )
   {
-    QgsVectorLayer *layer = qobject_cast< QgsVectorLayer *>( it.value() );
+    QgsVectorLayer *layer = qobject_cast<QgsVectorLayer *>( it.value() );
     if ( !layer || !layer->dataProvider() || !layer->flags().testFlag( QgsMapLayer::Searchable ) )
       continue;
 
@@ -65,26 +73,24 @@ QStringList QgsAllLayersFeaturesLocatorFilter::prepare( const QString &string, c
     QgsFeatureRequest req;
     req.setSubsetOfAttributes( qgis::setToList( expression.referencedAttributeIndexes( layer->fields() ) ) );
     if ( !expression.needsGeometry() )
-      req.setFlags( QgsFeatureRequest::NoGeometry );
+      req.setFlags( Qgis::FeatureRequestFlag::NoGeometry );
     QString enhancedSearch = string;
     enhancedSearch.replace( ' ', '%' );
-    req.setFilterExpression( QStringLiteral( "%1 ILIKE '%%2%'" )
-                             .arg( layer->displayExpression(), enhancedSearch ) );
+    req.setFilterExpression( u"%1 ILIKE '%%2%'"_s.arg( layer->displayExpression(), enhancedSearch ) );
     req.setLimit( mMaxResultsPerLayer );
 
     QgsFeatureRequest exactMatchRequest = req;
-    exactMatchRequest.setFilterExpression( QStringLiteral( "%1 ILIKE '%2'" )
-                                           .arg( layer->displayExpression(), enhancedSearch ) );
+    exactMatchRequest.setFilterExpression( u"%1 ILIKE '%2'"_s.arg( layer->displayExpression(), enhancedSearch ) );
     exactMatchRequest.setLimit( mMaxResultsPerLayer );
 
     std::shared_ptr<PreparedLayer> preparedLayer( new PreparedLayer() );
     preparedLayer->expression = expression;
-    preparedLayer->context = context;
+    preparedLayer->context = std::move( context );
     preparedLayer->layerId = layer->id();
     preparedLayer->layerName = layer->name();
-    preparedLayer->featureSource.reset( new QgsVectorLayerFeatureSource( layer ) );
-    preparedLayer->request = req;
-    preparedLayer->exactMatchRequest = exactMatchRequest;
+    preparedLayer->featureSource = std::make_unique<QgsVectorLayerFeatureSource>( layer );
+    preparedLayer->request = std::move( req );
+    preparedLayer->exactMatchRequest = std::move( exactMatchRequest );
     preparedLayer->layerIcon = QgsIconUtils::iconForLayer( layer );
     preparedLayer->layerIsSpatial = layer->isSpatial();
 
@@ -120,10 +126,10 @@ void QgsAllLayersFeaturesLocatorFilter::fetchResults( const QString &string, con
 
       result.displayString = preparedLayer->expression.evaluate( &( preparedLayer->context ) ).toString();
 
-      result.userData = ResultData( f.id(), preparedLayer->layerId, preparedLayer->layerIsSpatial ).toVariant();
+      result.setUserData( ResultData( f.id(), preparedLayer->layerId, preparedLayer->layerIsSpatial ).toVariant() );
       foundFeatureIds << f.id();
       result.icon = preparedLayer->layerIcon;
-      result.score = static_cast< double >( string.length() ) / result.displayString.size();
+      result.score = static_cast<double>( string.length() ) / result.displayString.size();
 
       result.actions << QgsLocatorResult::ResultAction( OpenForm, tr( "Open form…" ) );
       emit resultFetched( result );
@@ -154,9 +160,9 @@ void QgsAllLayersFeaturesLocatorFilter::fetchResults( const QString &string, con
 
       result.displayString = preparedLayer->expression.evaluate( &( preparedLayer->context ) ).toString();
 
-      result.userData = ResultData( f.id(), preparedLayer->layerId, preparedLayer->layerIsSpatial ).toVariant();
+      result.setUserData( ResultData( f.id(), preparedLayer->layerId, preparedLayer->layerIsSpatial ).toVariant() );
       result.icon = preparedLayer->layerIcon;
-      result.score = static_cast< double >( string.length() ) / result.displayString.size();
+      result.score = static_cast<double>( string.length() ) / result.displayString.size();
 
       if ( preparedLayer->layerIsSpatial )
         result.actions << QgsLocatorResult::ResultAction( OpenForm, tr( "Open form…" ) );
@@ -179,7 +185,7 @@ void QgsAllLayersFeaturesLocatorFilter::triggerResult( const QgsLocatorResult &r
 
 void QgsAllLayersFeaturesLocatorFilter::triggerResultFromAction( const QgsLocatorResult &result, const int actionId )
 {
-  ResultData data = ResultData::fromVariant( result.userData );
+  ResultData data = ResultData::fromVariant( result.userData() );
   QgsFeatureId fid = data.id();
   QString layerId = data.layerId();
   bool layerIsSpatial = data.layerIsSpatial();
@@ -195,7 +201,7 @@ void QgsAllLayersFeaturesLocatorFilter::triggerResultFromAction( const QgsLocato
     bool fetched = layer->getFeatures( request ).nextFeature( f );
     if ( !fetched )
       return;
-    QgsFeatureAction action( tr( "Attributes changed" ), f, layer, QString(), -1, QgisApp::instance() );
+    QgsFeatureAction action( tr( "Attributes changed" ), f, layer, QUuid(), -1, QgisApp::instance() );
     if ( layer->isEditable() )
     {
       action.editFeature( false );
@@ -216,27 +222,26 @@ void QgsAllLayersFeaturesLocatorFilter::openConfigWidget( QWidget *parent )
 {
   QString key = "locator_filters/all_layers_features";
   QgsSettings settings;
-  std::unique_ptr<QDialog> dlg( new QDialog( parent ) );
-  dlg->restoreGeometry( settings.value( QStringLiteral( "Windows/%1/geometry" ).arg( key ) ).toByteArray() );
+  auto dlg = std::make_unique<QDialog>( parent );
+  dlg->restoreGeometry( settings.value( u"Windows/%1/geometry"_s.arg( key ) ).toByteArray() );
   dlg->setWindowTitle( "All layers features locator filter" );
   QFormLayout *formLayout = new QFormLayout;
   QSpinBox *globalLimitSpinBox = new QSpinBox( dlg.get() );
-  globalLimitSpinBox->setValue( settings.value( QStringLiteral( "%1/limit_global" ).arg( key ), 15, QgsSettings::App ).toInt() );
+  globalLimitSpinBox->setValue( settings.value( u"%1/limit_global"_s.arg( key ), 15, QgsSettings::App ).toInt() );
   globalLimitSpinBox->setMinimum( 1 );
   globalLimitSpinBox->setMaximum( 200 );
   formLayout->addRow( tr( "&Maximum number of results:" ), globalLimitSpinBox );
   QSpinBox *perLayerLimitSpinBox = new QSpinBox( dlg.get() );
-  perLayerLimitSpinBox->setValue( settings.value( QStringLiteral( "%1/limit_per_layer" ).arg( key ), 8, QgsSettings::App ).toInt() );
+  perLayerLimitSpinBox->setValue( settings.value( u"%1/limit_per_layer"_s.arg( key ), 8, QgsSettings::App ).toInt() );
   perLayerLimitSpinBox->setMinimum( 1 );
   perLayerLimitSpinBox->setMaximum( 200 );
   formLayout->addRow( tr( "&Maximum number of results per layer:" ), perLayerLimitSpinBox );
   QDialogButtonBox *buttonbBox = new QDialogButtonBox( QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg.get() );
   formLayout->addRow( buttonbBox );
   dlg->setLayout( formLayout );
-  connect( buttonbBox, &QDialogButtonBox::accepted, [&]()
-  {
-    settings.setValue( QStringLiteral( "%1/limit_global" ).arg( key ), globalLimitSpinBox->value(), QgsSettings::App );
-    settings.setValue( QStringLiteral( "%1/limit_per_layer" ).arg( key ), perLayerLimitSpinBox->value(), QgsSettings::App );
+  connect( buttonbBox, &QDialogButtonBox::accepted, dlg.get(), [&]() {
+    settings.setValue( u"%1/limit_global"_s.arg( key ), globalLimitSpinBox->value(), QgsSettings::App );
+    settings.setValue( u"%1/limit_per_layer"_s.arg( key ), perLayerLimitSpinBox->value(), QgsSettings::App );
     dlg->accept();
   } );
   connect( buttonbBox, &QDialogButtonBox::rejected, dlg.get(), &QDialog::reject );

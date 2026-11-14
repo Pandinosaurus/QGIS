@@ -42,6 +42,18 @@ GO
 DROP TABLE IF EXISTS qgis_test.[constraints];
 GO
 
+DROP TABLE IF EXISTS qgis_test.[edit_data];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[layer_extent_in_geometry_table];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[test_complex_pk_name];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[test_identity];
+GO
+
 DROP SCHEMA qgis_test;
 GO
 
@@ -276,7 +288,7 @@ CREATE TABLE [qgis_test].[tb_test_composite_float_pk]
 (
     pk1 integer,
     pk2 bigint,
-    pk3 real,
+    pk3 float,
     value nvarchar(16),
     geom geometry,
     PRIMARY KEY (pk1, pk2, pk3)

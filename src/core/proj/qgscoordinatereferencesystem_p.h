@@ -29,25 +29,16 @@
 // version without notice, or even be removed.
 //
 
-#include "qgscoordinatereferencesystem.h"
-
 #include <proj.h>
+
+#include "qgscoordinatereferencesystem.h"
 #include "qgsprojutils.h"
 #include "qgsreadwritelocker.h"
-
-#ifdef DEBUG
-typedef struct OGRSpatialReferenceHS *OGRSpatialReferenceH;
-#else
-typedef void *OGRSpatialReferenceH;
-#endif
 
 class QgsCoordinateReferenceSystemPrivate : public QSharedData
 {
   public:
-
-    explicit QgsCoordinateReferenceSystemPrivate()
-    {
-    }
+    explicit QgsCoordinateReferenceSystemPrivate() {}
 
     QgsCoordinateReferenceSystemPrivate( const QgsCoordinateReferenceSystemPrivate &other )
       : QSharedData( other )
@@ -55,20 +46,24 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
       , mDescription( other.mDescription )
       , mProjectionAcronym( other.mProjectionAcronym )
       , mEllipsoidAcronym( other.mEllipsoidAcronym )
+      , mProjType( other.mProjType )
       , mIsGeographic( other.mIsGeographic )
+      , mIsGeographicCrossingAntimeridian( other.mIsGeographicCrossingAntimeridian )
       , mMapUnits( other.mMapUnits )
       , mSRID( other.mSRID )
       , mAuthId( other.mAuthId )
       , mIsValid( other.mIsValid )
       , mCoordinateEpoch( other.mCoordinateEpoch )
+      , mTopocentricBaseCrs( other.mTopocentricBaseCrs ? std::make_unique<QgsCoordinateReferenceSystem>( *other.mTopocentricBaseCrs ) : nullptr )
       , mPj()
+      , mPjParentContext( nullptr )
       , mProj4( other.mProj4 )
       , mWktPreferred( other.mWktPreferred )
       , mAxisInvertedDirty( other.mAxisInvertedDirty )
       , mAxisInverted( other.mAxisInverted )
+      , mProjLock {}
       , mProjObjects()
-    {
-    }
+    {}
 
     ~QgsCoordinateReferenceSystemPrivate()
     {
@@ -92,11 +87,16 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     //! The official proj4 acronym for the ellipsoid
     QString mEllipsoidAcronym;
 
+    PJ_TYPE mProjType = PJ_TYPE::PJ_TYPE_UNKNOWN;
+
     //! Whether this is a geographic or projected coordinate system
     bool mIsGeographic = false;
 
+    //! Whether this is a geographic CRS whose bounds of use crosses the antimeridian
+    bool mIsGeographicCrossingAntimeridian = false;
+
     //! The map units for the CRS
-    QgsUnitTypes::DistanceUnit mMapUnits = QgsUnitTypes::DistanceUnknownUnit;
+    Qgis::DistanceUnit mMapUnits = Qgis::DistanceUnit::Unknown;
 
     //! If available, the PostGIS spatial_ref_sys identifier for this CRS (defaults to 0)
     long mSRID = 0;
@@ -110,6 +110,9 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     //! Coordinate epoch
     double mCoordinateEpoch = std::numeric_limits< double >::quiet_NaN();
 
+    //! Base CRS for topocentric CRS (null if not set or not a topocentric CRS)
+    std::unique_ptr<QgsCoordinateReferenceSystem> mTopocentricBaseCrs;
+
     // this is the "master" proj object, to be used as a template for new proj objects created on different threads ONLY.
     // Always use threadLocalProjObject() instead of this.
 
@@ -119,7 +122,6 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
 
     void cleanPjObjects()
     {
-
       // During destruction of PJ* objects, the errno is set in the underlying
       // context. Consequently the context attached to the PJ* must still exist !
       // Which is not necessarily the case currently unfortunately. So
@@ -141,7 +143,6 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     }
 
   public:
-
     void setPj( QgsProjUtils::proj_pj_unique_ptr obj )
     {
       const QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
@@ -149,6 +150,15 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
 
       mPj = std::move( obj );
       mPjParentContext = QgsProjContext::get();
+
+      if ( mPj )
+      {
+        mProjType = proj_get_type( mPj.get() );
+      }
+      else
+      {
+        mProjType = PJ_TYPE_UNKNOWN;
+      }
     }
 
     bool hasPj() const
@@ -168,11 +178,10 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     mutable bool mAxisInverted = false;
 
   private:
-    mutable QReadWriteLock mProjLock{};
-    mutable QMap < PJ_CONTEXT *, PJ * > mProjObjects{};
+    mutable QReadWriteLock mProjLock {};
+    mutable QMap< PJ_CONTEXT *, PJ * > mProjObjects {};
 
   public:
-
     PJ *threadLocalProjObject() const
     {
       QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Read );
@@ -180,7 +189,7 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
         return nullptr;
 
       PJ_CONTEXT *context = QgsProjContext::get();
-      const QMap < PJ_CONTEXT *, PJ * >::const_iterator it = mProjObjects.constFind( context );
+      const QMap< PJ_CONTEXT *, PJ * >::const_iterator it = mProjObjects.constFind( context );
 
       if ( it != mProjObjects.constEnd() )
       {
@@ -200,7 +209,7 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     {
       const QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
 
-      const QMap < PJ_CONTEXT *, PJ * >::iterator it = mProjObjects.find( pj_context );
+      const QMap< PJ_CONTEXT *, PJ * >::iterator it = mProjObjects.find( pj_context );
       if ( it != mProjObjects.end() )
       {
         proj_destroy( it.value() );
@@ -217,8 +226,7 @@ class QgsCoordinateReferenceSystemPrivate : public QSharedData
     }
 
   private:
-    QgsCoordinateReferenceSystemPrivate &operator= ( const QgsCoordinateReferenceSystemPrivate & ) = delete;
-
+    QgsCoordinateReferenceSystemPrivate &operator=( const QgsCoordinateReferenceSystemPrivate & ) = delete;
 };
 
 /// @endcond

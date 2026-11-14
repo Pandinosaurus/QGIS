@@ -16,13 +16,16 @@
 #ifndef QGSPROVIDERSUBLAYERDETAILS_H
 #define QGSPROVIDERSUBLAYERDETAILS_H
 
-#include "qgis_core.h"
 #include "qgis.h"
-#include "qgswkbtypes.h"
+#include "qgis_core.h"
 #include "qgscoordinatetransformcontext.h"
+#include "qgsmimedatautils.h"
+#include "qgswkbtypes.h"
 
 #include <QString>
 #include <QStringList>
+
+using namespace Qt::StringLiterals;
 
 /**
  * \class QgsProviderSublayerDetails
@@ -35,7 +38,7 @@
  *
  * \note It is possible that multiple data providers may be able to utilize the same underlying
  * sub layer in a single dataset, yet will interpret this layer differently. For instance, a layer
- * in a GeoPDF document can be interpreted as either a vector layer by the OGR data provider or a raster
+ * in a Geospatial PDF document can be interpreted as either a vector layer by the OGR data provider or a raster
  * layer by the GDAL provider. The providerKey() property can be used to determine the data provider
  * associated with a QgsProviderSubLayerDetails instance.
  *
@@ -44,7 +47,6 @@
 class CORE_EXPORT QgsProviderSublayerDetails
 {
   public:
-
     /**
      * Returns the associated data provider key.
      *
@@ -64,14 +66,14 @@ class CORE_EXPORT QgsProviderSublayerDetails
      *
      * \see setType()
      */
-    QgsMapLayerType type() const { return mType; }
+    Qgis::LayerType type() const { return mType; }
 
     /**
      * Sets the layer \a type.
      *
      * \see type()
      */
-    void setType( QgsMapLayerType type ) { mType = type; }
+    void setType( Qgis::LayerType type ) { mType = type; }
 
     /**
      * Returns the layer's URI.
@@ -92,19 +94,32 @@ class CORE_EXPORT QgsProviderSublayerDetails
      */
     struct LayerOptions
     {
-
-      /**
+        /**
        * Constructor for LayerOptions with \a transformContext.
        */
-      explicit LayerOptions( const QgsCoordinateTransformContext &transformContext )
-        : transformContext( transformContext )
-      {}
+        explicit LayerOptions( const QgsCoordinateTransformContext &transformContext )
+          : transformContext( transformContext )
+        {}
 
-      //! Coordinate transform context
-      QgsCoordinateTransformContext transformContext;
+        //! Coordinate transform context
+        QgsCoordinateTransformContext transformContext;
 
-      //! Set to TRUE if the default layer style should be loaded
-      bool loadDefaultStyle = true;
+        //! Set to TRUE if the default layer style should be loaded
+        bool loadDefaultStyle = true;
+
+        /**
+       * Controls whether the stored styles will be all loaded.
+       *
+       * If TRUE and the layer's provider supports style stored in the
+       * data source all the available styles will be loaded in addition
+       * to the default one.
+       *
+       * If FALSE (the default), the layer's provider will only load
+       * the default style.
+       *
+       * \since QGIS 3.30
+       */
+        bool loadAllStoredStyle = false;
     };
 
     /**
@@ -215,7 +230,7 @@ class CORE_EXPORT QgsProviderSublayerDetails
      *
      * \see setWkbType()
      */
-    QgsWkbTypes::Type wkbType() const { return mWkbType; }
+    Qgis::WkbType wkbType() const { return mWkbType; }
 
     /**
      * Set the layer's WKB \a type.
@@ -224,7 +239,7 @@ class CORE_EXPORT QgsProviderSublayerDetails
      *
      * \see wkbType()
      */
-    void setWkbType( QgsWkbTypes::Type type ) { mWkbType = type; }
+    void setWkbType( Qgis::WkbType type ) { mWkbType = type; }
 
     /**
      * Returns the layer's geometry column name, or an empty string if not applicable.
@@ -243,19 +258,24 @@ class CORE_EXPORT QgsProviderSublayerDetails
     void setGeometryColumnName( const QString &name ) { mGeometryColumnName = name; }
 
 #ifdef SIP_RUN
+    // clang-format off
     SIP_PYOBJECT __repr__();
     % MethodCode
-    QString str = QStringLiteral( "<QgsProviderSublayerDetails: %1 - %2>" ).arg( sipCpp->providerKey(), sipCpp->name() );
+    QString str = u"<QgsProviderSublayerDetails: %1 - %2>"_s.arg( sipCpp->providerKey(), sipCpp->name() );
     sipRes = PyUnicode_FromString( str.toUtf8().constData() );
     % End
+// clang-format on
 #endif
 
-    /**
+      /**
      * Returns the associated layer number, for providers which order sublayers.
      *
      * \see setLayerNumber()
      */
-    int layerNumber() const { return mLayerNumber; }
+      int layerNumber() const
+    {
+      return mLayerNumber;
+    }
 
     /**
      * Sets the associated layer \a number, for providers which order sublayers.
@@ -268,7 +288,7 @@ class CORE_EXPORT QgsProviderSublayerDetails
      * Set to TRUE if the layer is a potential dataset container and an in-depth scan
      * of its contents was skipped.
      *
-     * \see skippedContainerScan();
+     * \see skippedContainerScan()
      */
     void setSkippedContainerScan( bool skipped ) { mSkippedContainerScan = skipped; }
 
@@ -276,18 +296,24 @@ class CORE_EXPORT QgsProviderSublayerDetails
      * Returns TRUE if the layer is a potential dataset container and an in-depth scan
      * of its contents was skipped.
      *
-     * \see setSkippedContainerScan();
+     * \see setSkippedContainerScan()
      */
     bool skippedContainerScan() const { return mSkippedContainerScan; }
+
+    /**
+     * Converts the sublayer details to a QgsMimeDataUtils::Uri representing the sublayer.
+     *
+     * \since QGIS 3.28
+     */
+    QgsMimeDataUtils::Uri toMimeUri() const;
 
     // TODO c++20 - replace with = default
     bool operator==( const QgsProviderSublayerDetails &other ) const;
     bool operator!=( const QgsProviderSublayerDetails &other ) const;
 
   private:
-
     QString mProviderKey;
-    QgsMapLayerType mType = QgsMapLayerType::VectorLayer;
+    Qgis::LayerType mType = Qgis::LayerType::Vector;
     QString mUri;
     int mLayerNumber = 0;
     QString mName;
@@ -295,14 +321,10 @@ class CORE_EXPORT QgsProviderSublayerDetails
     long long mFeatureCount = static_cast< long >( Qgis::FeatureCountState::UnknownCount );
     QString mGeometryColumnName;
     QStringList mPath;
-    QgsWkbTypes::Type mWkbType = QgsWkbTypes::Unknown;
+    Qgis::WkbType mWkbType = Qgis::WkbType::Unknown;
     QString mDriverName;
     bool mSkippedContainerScan = false;
     Qgis::SublayerFlags mFlags = Qgis::SublayerFlags();
-
 };
 
 #endif //QGSPROVIDERSUBLAYERDETAILS_H
-
-
-

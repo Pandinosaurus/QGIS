@@ -14,13 +14,16 @@
  ***************************************************************************/
 
 #include "qgsvectorlayerfeaturecounter.h"
-#include "qgsvectorlayer.h"
+
 #include "qgsfeatureid.h"
 #include "qgsfeedback.h"
 #include "qgsrendercontext.h"
+#include "qgsvectorlayer.h"
+
+#include "moc_qgsvectorlayerfeaturecounter.cpp"
 
 QgsVectorLayerFeatureCounter::QgsVectorLayerFeatureCounter( QgsVectorLayer *layer, const QgsExpressionContext &context, bool storeSymbolFids )
-  : QgsTask( tr( "Counting features in %1" ).arg( layer->name() ), QgsTask::CanCancel | QgsTask::CancelWithoutPrompt )
+  : QgsTask( tr( "Counting features in %1" ).arg( layer->name() ), QgsTask::CanCancel | QgsTask::CancelWithoutPrompt | QgsTask::Silent )
   , mSource( new QgsVectorLayerFeatureSource( layer ) )
   , mRenderer( layer->renderer()->clone() )
   , mExpressionContext( context )
@@ -63,7 +66,7 @@ bool QgsVectorLayerFeatureCounter::run()
 
     QgsFeatureRequest request;
     if ( !mRenderer->filterNeedsGeometry() )
-      request.setFlags( QgsFeatureRequest::NoGeometry );
+      request.setFlags( Qgis::FeatureRequestFlag::NoGeometry );
     request.setSubsetOfAttributes( mRenderer->usedAttributes( renderContext ), mSource->fields() );
 
     request.setFeedback( mFeedback.get() );

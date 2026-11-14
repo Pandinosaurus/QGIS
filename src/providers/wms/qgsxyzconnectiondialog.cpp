@@ -14,12 +14,18 @@
  ***************************************************************************/
 
 #include "qgsxyzconnectiondialog.h"
-#include "qgsxyzconnection.h"
+
 #include "qgsgui.h"
 #include "qgshelp.h"
+#include "qgsxyzconnection.h"
 #include "qgsxyzsourcewidget.h"
 
 #include <QMessageBox>
+#include <QString>
+
+#include "moc_qgsxyzconnectiondialog.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsXyzConnectionDialog::QgsXyzConnectionDialog( QWidget *parent )
   : QDialog( parent )
@@ -33,10 +39,7 @@ QgsXyzConnectionDialog::QgsXyzConnectionDialog( QWidget *parent )
   mConnectionGroupBox->setLayout( hlayout );
 
   buttonBox->button( QDialogButtonBox::Ok )->setDisabled( true );
-  connect( buttonBox, &QDialogButtonBox::helpRequested, this,  [ = ]
-  {
-    QgsHelp::openHelp( QStringLiteral( "managing_data_source/opening_data.html#using-xyz-tile-services" ) );
-  } );
+  connect( buttonBox, &QDialogButtonBox::helpRequested, this, [] { QgsHelp::openHelp( u"managing_data_source/opening_data.html#using-xyz-tile-services"_s ); } );
   connect( mEditName, &QLineEdit::textChanged, this, &QgsXyzConnectionDialog::updateOkButtonState );
   connect( mSourceWidget, &QgsXyzSourceWidget::validChanged, this, &QgsXyzConnectionDialog::updateOkButtonState );
 }
@@ -49,9 +52,10 @@ void QgsXyzConnectionDialog::setConnection( const QgsXyzConnection &conn )
   mSourceWidget->setZMax( conn.zMax );
   mSourceWidget->setUsername( conn.username );
   mSourceWidget->setPassword( conn.password );
-  mSourceWidget->setReferer( conn.referer );
+  mSourceWidget->setReferer( conn.httpHeaders[QgsHttpHeaders::KEY_REFERER].toString() );
   mSourceWidget->setTilePixelRatio( conn.tilePixelRatio );
   mSourceWidget->setAuthCfg( conn.authCfg );
+  mSourceWidget->setInterpretation( conn.interpretation );
 }
 
 QgsXyzConnection QgsXyzConnectionDialog::connection() const
@@ -63,9 +67,10 @@ QgsXyzConnection QgsXyzConnectionDialog::connection() const
   conn.zMax = mSourceWidget->zMax();
   conn.username = mSourceWidget->username();
   conn.password = mSourceWidget->password();
-  conn.referer = mSourceWidget->referer();
+  conn.httpHeaders[QgsHttpHeaders::KEY_REFERER] = mSourceWidget->referer();
   conn.tilePixelRatio = mSourceWidget->tilePixelRatio();
-  conn.authCfg = mSourceWidget->authcfg( );
+  conn.authCfg = mSourceWidget->authcfg();
+  conn.interpretation = mSourceWidget->interpretation();
   return conn;
 }
 
@@ -77,9 +82,7 @@ void QgsXyzConnectionDialog::updateOkButtonState()
 
 void QgsXyzConnectionDialog::accept()
 {
-  if ( mSourceWidget->zMin() != -1
-       && mSourceWidget->zMax() != -1
-       && mSourceWidget->zMax() < mSourceWidget->zMin() )
+  if ( mSourceWidget->zMin() != -1 && mSourceWidget->zMax() != -1 && mSourceWidget->zMax() < mSourceWidget->zMin() )
   {
     QMessageBox::warning( this, tr( "Connection Properties" ), tr( "The maximum zoom level (%1) cannot be lower than the minimum zoom level (%2)." ).arg( mSourceWidget->zMax() ).arg( mSourceWidget->zMin() ) );
     return;

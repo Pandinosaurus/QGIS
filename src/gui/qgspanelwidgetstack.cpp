@@ -12,16 +12,20 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
-#include <QDialogButtonBox>
-#include <QPushButton>
-#include <QDialog>
-#include <QSettings>
-
-#include "qgslogger.h"
-
 #include "qgspanelwidgetstack.h"
 
+#include "qgslogger.h"
 #include "qgspanelwidget.h"
+
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QPushButton>
+#include <QSettings>
+#include <QString>
+
+#include "moc_qgspanelwidgetstack.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsPanelWidgetStack::QgsPanelWidgetStack( QWidget *parent )
   : QWidget( parent )
@@ -31,18 +35,24 @@ QgsPanelWidgetStack::QgsPanelWidgetStack( QWidget *parent )
 
   connect( mBackButton, &QAbstractButton::clicked, this, &QgsPanelWidgetStack::acceptCurrentPanel );
 
-  mMenuButton->setStyleSheet( QStringLiteral( "QToolButton::menu-indicator { image: none; }" ) );
+  mMenuButton->setStyleSheet( u"QToolButton::menu-indicator { image: none; }"_s );
 }
 
 void QgsPanelWidgetStack::setMainPanel( QgsPanelWidget *panel )
 {
   // TODO Don't allow adding another main widget or else that would be strange for the user.
-  connect( panel, &QgsPanelWidget::showPanel, this, &QgsPanelWidgetStack::showPanel,
-           // using unique connection because addMainPanel() may be called multiple times
-           // for a panel, so showPanel() slot could be invoked more times from one signal
-           Qt::UniqueConnection );
+  connect(
+    panel,
+    &QgsPanelWidget::showPanel,
+    this,
+    &QgsPanelWidgetStack::showPanel,
+    // using unique connection because addMainPanel() may be called multiple times
+    // for a panel, so showPanel() slot could be invoked more times from one signal
+    Qt::UniqueConnection
+  );
   mStackedWidget->insertWidget( 0, panel );
   mStackedWidget->setCurrentIndex( 0 );
+  updateMenuButton();
 }
 
 QgsPanelWidget *QgsPanelWidgetStack::mainPanel()
@@ -56,8 +66,15 @@ QgsPanelWidget *QgsPanelWidgetStack::takeMainPanel()
   acceptAllPanels();
 
   QWidget *widget = mStackedWidget->widget( 0 );
-  mStackedWidget->removeWidget( widget );
-  return qobject_cast<QgsPanelWidget *>( widget );
+  if ( widget )
+  {
+    mStackedWidget->removeWidget( widget );
+    return qobject_cast<QgsPanelWidget *>( widget );
+  }
+  else
+  {
+    return nullptr;
+  }
 }
 
 void QgsPanelWidgetStack::clear()
@@ -199,7 +216,7 @@ void QgsPanelWidgetStack::updateBreadcrumb()
   const auto constMTitles = mTitles;
   for ( const QString &title : constMTitles )
   {
-    breadcrumb += QStringLiteral( " %1 >" ).arg( title );
+    breadcrumb += u" %1 >"_s.arg( title );
   }
   // Remove the last
   breadcrumb.chop( 1 );

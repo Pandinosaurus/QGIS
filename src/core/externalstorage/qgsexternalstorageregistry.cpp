@@ -16,13 +16,14 @@
 #include "qgsexternalstorageregistry.h"
 
 #include "qgsexternalstorage.h"
+#include "qgshttpexternalstorage_p.h"
 #include "qgssimplecopyexternalstorage_p.h"
-#include "qgswebdavexternalstorage_p.h"
 
 QgsExternalStorageRegistry::QgsExternalStorageRegistry()
 {
   registerExternalStorage( new QgsSimpleCopyExternalStorage() );
-  registerExternalStorage( new QgsWebDAVExternalStorage() );
+  registerExternalStorage( new QgsWebDavExternalStorage() );
+  registerExternalStorage( new QgsAwsS3ExternalStorage() );
 }
 
 QgsExternalStorageRegistry::~QgsExternalStorageRegistry()
@@ -32,10 +33,7 @@ QgsExternalStorageRegistry::~QgsExternalStorageRegistry()
 
 QgsExternalStorage *QgsExternalStorageRegistry::externalStorageFromType( const QString &type ) const
 {
-  auto it = std::find_if( mBackends.begin(), mBackends.end(), [ = ]( QgsExternalStorage * storage )
-  {
-    return storage->type() == type;
-  } );
+  auto it = std::find_if( mBackends.begin(), mBackends.end(), [type]( QgsExternalStorage *storage ) { return storage->type() == type; } );
 
   return it != mBackends.end() ? *it : nullptr;
 }

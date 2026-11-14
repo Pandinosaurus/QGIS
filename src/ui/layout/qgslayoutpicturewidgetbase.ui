@@ -44,7 +44,7 @@
       </sizepolicy>
      </property>
      <property name="styleSheet">
-      <string notr="true">padding: 2px; font-weight: bold; background-color: rgb(200, 200, 200);</string>
+      <string notr="true">padding: 2px; font-weight: bold; background-color: palette(mid);</string>
      </property>
      <property name="text">
       <string>Picture</string>
@@ -279,6 +279,39 @@
           </item>
           <item row="3" column="0">
            <widget class="QComboBox" name="mAnchorPointComboBox"/>
+          </item>
+         </layout>
+        </widget>
+       </item>       <item>
+        <widget class="QgsCollapsibleGroupBoxBasic" name="mClipToItemCheckBox">
+         <property name="title">
+          <string>Clip to Item</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+         <property name="collapsed" stdset="0">
+          <bool>true</bool>
+         </property>
+         <property name="syncGroup" stdset="0">
+          <string notr="true">composeritem</string>
+         </property>
+         <layout class="QGridLayout" name="clipToItemLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="mClipToItemLabel">
+            <property name="text">
+             <string>&lt;b&gt;When enabled, the picture will be automatically clipped to the selected shape.&lt;/b&gt;</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QgsLayoutItemComboBox" name="mClipItemComboBox"/>
           </item>
          </layout>
         </widget>

@@ -13,24 +13,33 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <QQuickWindow>
-#include <QSGSimpleTextureNode>
-#include <QScreen>
+#include "qgsquickmapcanvasmap.h"
 
 #include "qgis.h"
+#include "qgsannotationlayer.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsgrouplayer.h"
+#include "qgslabelingresults.h"
+#include "qgsmaplayerelevationproperties.h"
+#include "qgsmaplayertemporalproperties.h"
 #include "qgsmaprenderercache.h"
 #include "qgsmaprendererparalleljob.h"
 #include "qgsmessagelog.h"
 #include "qgspallabeling.h"
 #include "qgsproject.h"
-#include "qgsannotationlayer.h"
-#include "qgsvectorlayer.h"
-#include "qgslabelingresults.h"
-
-#include "qgsquickmapcanvasmap.h"
 #include "qgsquickmapsettings.h"
+#include "qgsselectivemaskingsourcesetmanager.h"
+#include "qgssymbollayerutils.h"
+#include "qgsvectorlayer.h"
 
+#include <QQuickWindow>
+#include <QSGSimpleTextureNode>
+#include <QScreen>
+#include <QString>
+
+#include "moc_qgsquickmapcanvasmap.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsQuickMapCanvasMap::QgsQuickMapCanvasMap( QQuickItem *parent )
   : QQuickItem( parent )
@@ -38,11 +47,13 @@ QgsQuickMapCanvasMap::QgsQuickMapCanvasMap( QQuickItem *parent )
   , mCache( std::make_unique<QgsMapRendererCache>() )
 {
   connect( this, &QQuickItem::windowChanged, this, &QgsQuickMapCanvasMap::onWindowChanged );
-  connect( &mRefreshTimer, &QTimer::timeout, this, &QgsQuickMapCanvasMap::refreshMap );
+  connect( &mRefreshTimer, &QTimer::timeout, this, [this] { refreshMap(); } );
   connect( &mMapUpdateTimer, &QTimer::timeout, this, &QgsQuickMapCanvasMap::renderJobUpdated );
 
   connect( mMapSettings.get(), &QgsQuickMapSettings::extentChanged, this, &QgsQuickMapCanvasMap::onExtentChanged );
   connect( mMapSettings.get(), &QgsQuickMapSettings::layersChanged, this, &QgsQuickMapCanvasMap::onLayersChanged );
+  connect( mMapSettings.get(), &QgsQuickMapSettings::temporalStateChanged, this, &QgsQuickMapCanvasMap::onTemporalStateChanged );
+  connect( mMapSettings.get(), &QgsQuickMapSettings::zRangeChanged, this, &QgsQuickMapCanvasMap::onzRangeChanged );
 
   connect( this, &QgsQuickMapCanvasMap::renderStarting, this, &QgsQuickMapCanvasMap::isRenderingChanged );
   connect( this, &QgsQuickMapCanvasMap::mapCanvasRefreshed, this, &QgsQuickMapCanvasMap::isRenderingChanged );
@@ -67,8 +78,7 @@ void QgsQuickMapCanvasMap::zoom( QPointF center, qreal scale )
   QgsPoint oldCenter( extent.center() );
   QgsPoint mousePos( mMapSettings->screenToCoordinate( center ) );
 
-  QgsPointXY newCenter( mousePos.x() + ( ( oldCenter.x() - mousePos.x() ) * scale ),
-                        mousePos.y() + ( ( oldCenter.y() - mousePos.y() ) * scale ) );
+  QgsPointXY newCenter( mousePos.x() + ( ( oldCenter.x() - mousePos.x() ) * scale ), mousePos.y() + ( ( oldCenter.y() - mousePos.y() ) * scale ) );
 
   // same as zoomWithCenter (no coordinate transformations are needed)
   extent.scale( scale, &newCenter );
@@ -98,14 +108,24 @@ void QgsQuickMapCanvasMap::refreshMap()
 {
   stopRendering(); // if any...
 
+  if ( mCacheInvalidations.testFlag( CacheInvalidationType::Temporal ) )
+  {
+    clearTemporalCache();
+    mCacheInvalidations &= ~( static_cast<int>( CacheInvalidationType::Temporal ) );
+  }
+  if ( mCacheInvalidations.testFlag( CacheInvalidationType::Elevation ) )
+  {
+    clearElevationCache();
+    mCacheInvalidations &= ~( static_cast<int>( CacheInvalidationType::Elevation ) );
+  }
+
   QgsMapSettings mapSettings = mMapSettings->mapSettings();
   if ( !mapSettings.hasValidSettings() )
     return;
 
   //build the expression context
   QgsExpressionContext expressionContext;
-  expressionContext << QgsExpressionContextUtils::globalScope()
-                    << QgsExpressionContextUtils::mapSettingsScope( mapSettings );
+  expressionContext << QgsExpressionContextUtils::globalScope() << QgsExpressionContextUtils::mapSettingsScope( mapSettings );
 
   QgsProject *project = mMapSettings->project();
   if ( project )
@@ -113,6 +133,7 @@ void QgsQuickMapCanvasMap::refreshMap()
     expressionContext << QgsExpressionContextUtils::projectScope( project );
 
     mapSettings.setLabelingEngineSettings( project->labelingEngineSettings() );
+    mapSettings.setSelectiveMaskingSourceSets( project->selectiveMaskingSourceSetManager()->sets() );
 
     // render main annotation layer above all other layers
     QList<QgsMapLayer *> allLayers = mapSettings.layers();
@@ -140,7 +161,10 @@ void QgsQuickMapCanvasMap::refreshMap()
 
   mJob->start();
 
-  emit renderStarting();
+  if ( !mSilentRefresh )
+  {
+    emit renderStarting();
+  }
 }
 
 void QgsQuickMapCanvasMap::renderJobUpdated()
@@ -158,7 +182,6 @@ void QgsQuickMapCanvasMap::renderJobUpdated()
   mFreeze = freeze;
 
   update();
-  emit mapCanvasRefreshed();
 }
 
 void QgsQuickMapCanvasMap::renderJobFinished()
@@ -169,7 +192,7 @@ void QgsQuickMapCanvasMap::renderJobFinished()
   const QgsMapRendererJob::Errors errors = mJob->errors();
   for ( const QgsMapRendererJob::Error &error : errors )
   {
-    QgsMessageLog::logMessage( QStringLiteral( "%1 :: %2" ).arg( error.layerID, error.message ), tr( "Rendering" ) );
+    QgsMessageLog::logMessage( u"%1 :: %2"_s.arg( error.layerID, error.message ), tr( "Rendering" ) );
   }
 
   // take labeling results before emitting renderComplete, so labeling map tools
@@ -194,7 +217,47 @@ void QgsQuickMapCanvasMap::renderJobFinished()
   mFreeze = freeze;
 
   update();
-  emit mapCanvasRefreshed();
+  if ( !mSilentRefresh )
+  {
+    emit mapCanvasRefreshed();
+  }
+  else
+  {
+    mSilentRefresh = false;
+  }
+
+  if ( mDeferredRefreshPending )
+  {
+    mDeferredRefreshPending = false;
+    mSilentRefresh = true;
+    refresh();
+  }
+}
+
+void QgsQuickMapCanvasMap::layerRepaintRequested( bool deferred )
+{
+  if ( mMapSettings->outputSize().isNull() )
+    return; // the map image size has not been set yet
+
+  if ( !mFreeze )
+  {
+    if ( deferred )
+    {
+      if ( !mJob )
+      {
+        mSilentRefresh = true;
+        refresh();
+      }
+      else
+      {
+        mDeferredRefreshPending = true;
+      }
+    }
+    else
+    {
+      refresh();
+    }
+  }
 }
 
 void QgsQuickMapCanvasMap::onWindowChanged( QQuickWindow *window )
@@ -229,6 +292,22 @@ void QgsQuickMapCanvasMap::onScreenChanged( QScreen *screen )
 void QgsQuickMapCanvasMap::onExtentChanged()
 {
   updateTransform();
+
+  // And trigger a new rendering job
+  refresh();
+}
+
+void QgsQuickMapCanvasMap::onTemporalStateChanged()
+{
+  mCacheInvalidations |= CacheInvalidationType::Temporal;
+
+  // And trigger a new rendering job
+  refresh();
+}
+
+void QgsQuickMapCanvasMap::onzRangeChanged()
+{
+  mCacheInvalidations |= CacheInvalidationType::Elevation;
 
   // And trigger a new rendering job
   refresh();
@@ -308,6 +387,11 @@ QSGNode *QgsQuickMapCanvasMap::updatePaintNode( QSGNode *oldNode, QQuickItem::Up
     mDirty = false;
   }
 
+  if ( mImage.isNull() )
+  {
+    return nullptr;
+  }
+
   QSGSimpleTextureNode *node = static_cast<QSGSimpleTextureNode *>( oldNode );
   if ( !node )
   {
@@ -340,9 +424,9 @@ QSGNode *QgsQuickMapCanvasMap::updatePaintNode( QSGNode *oldNode, QQuickItem::Up
   return node;
 }
 
-void QgsQuickMapCanvasMap::geometryChanged( const QRectF &newGeometry, const QRectF &oldGeometry )
+void QgsQuickMapCanvasMap::geometryChange( const QRectF &newGeometry, const QRectF &oldGeometry )
 {
-  QQuickItem::geometryChanged( newGeometry, oldGeometry );
+  QQuickItem::geometryChange( newGeometry, oldGeometry );
   if ( newGeometry.size() != oldGeometry.size() )
   {
     mMapSettings->setOutputSize( newGeometry.size().toSize() );
@@ -364,7 +448,7 @@ void QgsQuickMapCanvasMap::onLayersChanged()
   const QList<QgsMapLayer *> layers = mMapSettings->layers();
   for ( QgsMapLayer *layer : layers )
   {
-    mLayerConnections << connect( layer, &QgsMapLayer::repaintRequested, this, &QgsQuickMapCanvasMap::refresh );
+    mLayerConnections << connect( layer, &QgsMapLayer::repaintRequested, this, &QgsQuickMapCanvasMap::layerRepaintRequested );
   }
 
   refresh();
@@ -423,4 +507,117 @@ void QgsQuickMapCanvasMap::refresh()
 
   if ( !mFreeze )
     mRefreshTimer.start( 1 );
+}
+
+void QgsQuickMapCanvasMap::clearCache()
+{
+  if ( mCache )
+    mCache->clear();
+}
+
+void QgsQuickMapCanvasMap::clearTemporalCache()
+{
+  if ( mCache )
+  {
+    bool invalidateLabels = false;
+    const QList<QgsMapLayer *> layerList = mMapSettings->mapSettings().layers();
+    for ( QgsMapLayer *layer : layerList )
+    {
+      bool alreadyInvalidatedThisLayer = false;
+      if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layer ) )
+      {
+        if ( vl->renderer() && QgsSymbolLayerUtils::rendererFrameRate( vl->renderer() ) > -1 )
+        {
+          // layer has an animated symbol assigned, so we have to redraw it regardless of whether
+          // or not it has temporal settings
+          mCache->invalidateCacheForLayer( layer );
+          alreadyInvalidatedThisLayer = true;
+          // we can't shortcut and "continue" here, as we still need to check whether the layer
+          // will cause label invalidation using the logic below
+        }
+      }
+
+      if ( layer->temporalProperties() && layer->temporalProperties()->isActive() )
+      {
+        if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layer ) )
+        {
+          if ( vl->labelsEnabled() || vl->diagramsEnabled() )
+            invalidateLabels = true;
+        }
+
+        if ( layer->temporalProperties()->flags() & QgsTemporalProperty::FlagDontInvalidateCachedRendersWhenRangeChanges )
+          continue;
+
+        if ( !alreadyInvalidatedThisLayer )
+          mCache->invalidateCacheForLayer( layer );
+      }
+      else if ( QgsGroupLayer *gl = qobject_cast<QgsGroupLayer *>( layer ) )
+      {
+        const QList<QgsMapLayer *> childLayerList = gl->childLayers();
+        for ( QgsMapLayer *childLayer : childLayerList )
+        {
+          if ( childLayer->temporalProperties() && childLayer->temporalProperties()->isActive() )
+          {
+            if ( childLayer->temporalProperties()->flags() & QgsTemporalProperty::FlagDontInvalidateCachedRendersWhenRangeChanges )
+              continue;
+
+            mCache->invalidateCacheForLayer( layer );
+            break;
+          }
+        }
+      }
+    }
+
+    if ( invalidateLabels )
+    {
+      mCache->clearCacheImage( u"_labels_"_s );
+      mCache->clearCacheImage( u"_preview_labels_"_s );
+    }
+  }
+}
+
+void QgsQuickMapCanvasMap::clearElevationCache()
+{
+  if ( mCache )
+  {
+    bool invalidateLabels = false;
+    const QList<QgsMapLayer *> layerList = mMapSettings->mapSettings().layers();
+    for ( QgsMapLayer *layer : layerList )
+    {
+      if ( layer->elevationProperties() && layer->elevationProperties()->hasElevation() )
+      {
+        if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layer ) )
+        {
+          if ( vl->labelsEnabled() || vl->diagramsEnabled() )
+            invalidateLabels = true;
+        }
+
+        if ( layer->elevationProperties()->flags() & QgsMapLayerElevationProperties::FlagDontInvalidateCachedRendersWhenRangeChanges )
+          continue;
+
+        mCache->invalidateCacheForLayer( layer );
+      }
+      else if ( QgsGroupLayer *gl = qobject_cast<QgsGroupLayer *>( layer ) )
+      {
+        const QList<QgsMapLayer *> childLayerList = gl->childLayers();
+        for ( QgsMapLayer *childLayer : childLayerList )
+        {
+          if ( childLayer->elevationProperties() && childLayer->elevationProperties()->hasElevation() )
+          {
+            if ( childLayer->elevationProperties()->flags() & QgsMapLayerElevationProperties::FlagDontInvalidateCachedRendersWhenRangeChanges )
+              continue;
+
+            mCache->invalidateCacheForLayer( layer );
+            break;
+          }
+        }
+      }
+    }
+
+    if ( invalidateLabels )
+    {
+      mCache->clearCacheImage( u"_labels_"_s );
+      mCache->clearCacheImage( u"_preview_labels_"_s );
+    }
+  }
 }

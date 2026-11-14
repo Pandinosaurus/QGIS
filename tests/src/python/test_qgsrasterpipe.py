@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """
 ***************************************************************************
     test_qgsrasterpipe.py
@@ -20,18 +18,19 @@ From build dir, run: ctest -R PyQgsRasterPipe -V
 
 """
 
-__author__ = 'Nyall Dawson'
-__date__ = 'June 2021'
-__copyright__ = '(C) 2021, Nyall Dawson'
+__author__ = "Nyall Dawson"
+__date__ = "June 2021"
+__copyright__ = "(C) 2021, Nyall Dawson"
 
-import qgis  # NOQA
-from qgis.core import (QgsRasterPipe,
-                       QgsProperty,
-                       QgsExpressionContext,
-                       QgsSingleBandPseudoColorRenderer
-                       )
-from qgis.testing import start_app, unittest
+import unittest
 
+from qgis.core import (
+    QgsExpressionContext,
+    QgsProperty,
+    QgsRasterPipe,
+    QgsSingleBandPseudoColorRenderer,
+)
+from qgis.testing import QgisTestCase, start_app
 from utilities import unitTestDataPath
 
 # Convenience instances in case you may need them
@@ -40,14 +39,19 @@ start_app()
 TEST_DATA_DIR = unitTestDataPath()
 
 
-class TestQgsRasterPipe(unittest.TestCase):
-
+class TestQgsRasterPipe(QgisTestCase):
     def test_data_defined_properties(self):
         pipe = QgsRasterPipe()
 
-        pipe.dataDefinedProperties().setProperty(QgsRasterPipe.RendererOpacity, QgsProperty.fromExpression('100/2'))
-        self.assertEqual(pipe.dataDefinedProperties().property(QgsRasterPipe.RendererOpacity),
-                         QgsProperty.fromExpression('100/2'))
+        pipe.dataDefinedProperties().setProperty(
+            QgsRasterPipe.Property.RendererOpacity, QgsProperty.fromExpression("100/2")
+        )
+        self.assertEqual(
+            pipe.dataDefinedProperties().property(
+                QgsRasterPipe.Property.RendererOpacity
+            ),
+            QgsProperty.fromExpression("100/2"),
+        )
 
         pipe.set(QgsSingleBandPseudoColorRenderer(None))
         self.assertTrue(pipe.renderer())
@@ -58,5 +62,5 @@ class TestQgsRasterPipe(unittest.TestCase):
         self.assertEqual(pipe.renderer().opacity(), 0.5)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

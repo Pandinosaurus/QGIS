@@ -16,19 +16,19 @@
 #ifndef QGSSIMPLECOPYEXTERNALSTORAGE_H
 #define QGSSIMPLECOPYEXTERNALSTORAGE_H
 
-#include "externalstorage/qgsexternalstorage.h"
 #include "qgis_core.h"
 #include "qgis_sip.h"
+#include "qgsexternalstorage.h"
 
 #include <QPointer>
 
-///@cond PRIVATE
 #define SIP_NO_FILE
+
+///@cond PRIVATE
 
 class QgsCopyFileTask;
 
 /**
- * \ingroup core
  * \brief External storage implementation which simply copy the given resource
  * on a given directory file path.
  *
@@ -37,7 +37,6 @@ class QgsCopyFileTask;
 class CORE_EXPORT QgsSimpleCopyExternalStorage : public QgsExternalStorage
 {
   public:
-
     QString type() const override;
 
     QString displayName() const override;
@@ -48,17 +47,15 @@ class CORE_EXPORT QgsSimpleCopyExternalStorage : public QgsExternalStorage
 };
 
 /**
- * \ingroup core
  * \brief Class for Simple copy stored content
  *
  * \since QGIS 3.22
  */
-class QgsSimpleCopyExternalStorageStoredContent  : public QgsExternalStorageStoredContent
+class QgsSimpleCopyExternalStorageStoredContent : public QgsExternalStorageStoredContent
 {
     Q_OBJECT
 
   public:
-
     QgsSimpleCopyExternalStorageStoredContent( const QString &filePath, const QString &url, const QString &authcfg = QString() );
 
     void cancel() override;
@@ -68,13 +65,11 @@ class QgsSimpleCopyExternalStorageStoredContent  : public QgsExternalStorageStor
     void store() override;
 
   private:
-
     QPointer<QgsCopyFileTask> mCopyTask;
     QString mUrl;
 };
 
 /**
- * \ingroup core
  * \brief Class for Simple copy fetched content
  *
  * \since QGIS 3.22
@@ -84,7 +79,6 @@ class QgsSimpleCopyExternalStorageFetchedContent : public QgsExternalStorageFetc
     Q_OBJECT
 
   public:
-
     QgsSimpleCopyExternalStorageFetchedContent( const QString &filePath );
 
     QString filePath() const override;
@@ -92,10 +86,9 @@ class QgsSimpleCopyExternalStorageFetchedContent : public QgsExternalStorageFetc
     void fetch() override;
 
   private:
-
     QString mFilePath;
     QString mResultFilePath;
 };
 
-
+///@endcond
 #endif // QGSSIMPLECOPYEXTERNALSTORAGE_H

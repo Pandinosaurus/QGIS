@@ -14,22 +14,31 @@
  ***************************************************************************/
 
 #include "qgsdisplayangle.h"
-#include "qgsmapcanvas.h"
-#include "qgslogger.h"
-#include "qgsunittypes.h"
-#include "qgsmaptoolmeasureangle.h"
-#include "qgssettings.h"
-#include "qgsprojectdisplaysettings.h"
-#include "qgsproject.h"
-#include "qgsbearingnumericformat.h"
 
 #include <cmath>
 
+#include "qgsbearingnumericformat.h"
+#include "qgsgui.h"
+#include "qgsmapcanvas.h"
+#include "qgsmaptool.h"
+#include "qgsproject.h"
+#include "qgsprojectdisplaysettings.h"
+#include "qgssettings.h"
+#include "qgssettingsentryimpl.h"
+#include "qgssettingsregistrycore.h"
+#include "qgsunittypes.h"
+
+#include <QString>
+
+#include "moc_qgsdisplayangle.cpp"
+
+using namespace Qt::StringLiterals;
+
 QgsDisplayAngle::QgsDisplayAngle( QgsMapTool *tool, Qt::WindowFlags f )
   : QDialog( tool->canvas()->topLevelWidget(), f )
-  , mTool( tool )
 {
   setupUi( this );
+  QgsGui::enableAutoGeometryRestore( this );
 }
 
 void QgsDisplayAngle::setAngleInRadians( double value )
@@ -37,9 +46,9 @@ void QgsDisplayAngle::setAngleInRadians( double value )
   mValue = value;
 
   const QgsSettings settings;
-  const QgsUnitTypes::AngleUnit unit = QgsUnitTypes::decodeAngleUnit( settings.value( QStringLiteral( "qgis/measure/angleunits" ), QgsUnitTypes::encodeUnit( QgsUnitTypes::AngleDegrees ) ).toString() );
-  const int decimals = settings.value( QStringLiteral( "qgis/measure/decimalplaces" ), 3 ).toInt();
-  mAngleLineEdit->setText( QgsUnitTypes::formatAngle( mValue * QgsUnitTypes::fromUnitToUnitFactor( QgsUnitTypes::AngleRadians, unit ), decimals, unit ) );
+  const Qgis::AngleUnit unit = QgsUnitTypes::decodeAngleUnit( settings.value( u"qgis/measure/angleunits"_s, QgsUnitTypes::encodeUnit( Qgis::AngleUnit::Degrees ) ).toString() );
+  const int decimals = QgsSettingsRegistryCore::settingsMeasureDecimalPlaces->value();
+  mAngleLineEdit->setText( QgsUnitTypes::formatAngle( mValue * QgsUnitTypes::fromUnitToUnitFactor( Qgis::AngleUnit::Radians, unit ), decimals, unit ) );
 }
 
 void QgsDisplayAngle::setBearingInRadians( double value )

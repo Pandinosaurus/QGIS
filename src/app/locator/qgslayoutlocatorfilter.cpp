@@ -16,11 +16,14 @@
  ***************************************************************************/
 
 #include "qgslayoutlocatorfilter.h"
-#include "qgsproject.h"
-#include "qgsmasterlayoutinterface.h"
-#include "qgslayoutmanager.h"
-#include "qgisapp.h"
 
+#include "qgisapp.h"
+#include "qgslayoutmanager.h"
+#include "qgsmasterlayoutinterface.h"
+#include "qgsproject.h"
+#include "qgsstringutils.h"
+
+#include "moc_qgslayoutlocatorfilter.cpp"
 
 QgsLayoutLocatorFilter::QgsLayoutLocatorFilter( QObject *parent )
   : QgsLocatorFilter( parent )
@@ -33,16 +36,16 @@ QgsLayoutLocatorFilter *QgsLayoutLocatorFilter::clone() const
 
 void QgsLayoutLocatorFilter::fetchResults( const QString &string, const QgsLocatorContext &context, QgsFeedback * )
 {
-  const QList< QgsMasterLayoutInterface * > layouts = QgsProject::instance()->layoutManager()->layouts();
+  const QList<QgsMasterLayoutInterface *> layouts = QgsProject::instance()->layoutManager()->layouts();
   for ( QgsMasterLayoutInterface *layout : layouts )
   {
     // if the layout is broken, don't include it in the results
-    if ( ! layout )
+    if ( !layout )
       continue;
 
     QgsLocatorResult result;
     result.displayString = layout->name();
-    result.userData = layout->name();
+    result.setUserData( layout->name() );
 
     if ( context.usingPrefix && string.isEmpty() )
     {
@@ -50,7 +53,7 @@ void QgsLayoutLocatorFilter::fetchResults( const QString &string, const QgsLocat
       continue;
     }
 
-    result.score = fuzzyScore( result.displayString, string );
+    result.score = fuzzyScore( QgsStringUtils::unaccent( result.displayString ), QgsStringUtils::unaccent( string ) );
 
     if ( result.score > 0 )
       emit resultFetched( result );
@@ -59,7 +62,7 @@ void QgsLayoutLocatorFilter::fetchResults( const QString &string, const QgsLocat
 
 void QgsLayoutLocatorFilter::triggerResult( const QgsLocatorResult &result )
 {
-  const QString layoutName = result.userData.toString();
+  const QString layoutName = result.userData().toString();
   QgsMasterLayoutInterface *layout = QgsProject::instance()->layoutManager()->layoutByName( layoutName );
   if ( !layout )
     return;

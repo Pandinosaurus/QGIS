@@ -15,19 +15,18 @@
 #ifndef QGSPOSTGRESFEATUREITERATOR_H
 #define QGSPOSTGRESFEATUREITERATOR_H
 
+#include "qgscoordinatetransform.h"
 #include "qgsfeatureiterator.h"
+#include "qgspostgresprovider.h"
 
 #include <QQueue>
-
-#include "qgspostgresprovider.h"
-#include "qgscoordinatetransform.h"
 
 class QgsPostgresProvider;
 class QgsPostgresResult;
 class QgsPostgresTransaction;
 
 
-class QgsPostgresFeatureSource final: public QgsAbstractFeatureSource
+class QgsPostgresFeatureSource final : public QgsAbstractFeatureSource
 {
   public:
     explicit QgsPostgresFeatureSource( const QgsPostgresProvider *p );
@@ -36,7 +35,6 @@ class QgsPostgresFeatureSource final: public QgsAbstractFeatureSource
     QgsFeatureIterator getFeatures( const QgsFeatureRequest &request ) override;
 
   private:
-
     QString mConnInfo;
 
     QString mGeometryColumn;
@@ -46,8 +44,8 @@ class QgsPostgresFeatureSource final: public QgsAbstractFeatureSource
     QgsPostgresGeometryColumnType mSpatialColType;
     QString mRequestedSrid;
     QString mDetectedSrid;
-    QgsWkbTypes::Type mRequestedGeomType; //!< Geometry type requested in the uri
-    QgsWkbTypes::Type mDetectedGeomType;  //!< Geometry type detected in the database
+    Qgis::WkbType mRequestedGeomType; //!< Geometry type requested in the uri
+    Qgis::WkbType mDetectedGeomType;  //!< Geometry type detected in the database
     QgsPostgresPrimaryKeyType mPrimaryKeyType;
     QList<int> mPrimaryKeyAttrs;
     QString mQuery;
@@ -63,6 +61,8 @@ class QgsPostgresFeatureSource final: public QgsAbstractFeatureSource
      * connection has since been destroyed. */
     QgsPostgresConn *mTransactionConnection = nullptr;
 
+    QgsPostgresProvider::TopoLayerInfo mTopoLayerInfo;
+
     friend class QgsPostgresFeatureIterator;
     friend class QgsPostgresExpressionCompiler;
 };
@@ -70,7 +70,7 @@ class QgsPostgresFeatureSource final: public QgsAbstractFeatureSource
 
 class QgsPostgresConn;
 
-class QgsPostgresFeatureIterator final: public QgsAbstractFeatureIteratorFromSource<QgsPostgresFeatureSource>
+class QgsPostgresFeatureIterator final : public QgsAbstractFeatureIteratorFromSource<QgsPostgresFeatureSource>
 {
   public:
     QgsPostgresFeatureIterator( QgsPostgresFeatureSource *source, bool ownSource, const QgsFeatureRequest &request );
@@ -86,7 +86,6 @@ class QgsPostgresFeatureIterator final: public QgsAbstractFeatureIteratorFromSou
     bool prepareSimplification( const QgsSimplifyMethod &simplifyMethod ) override;
 
   private:
-
     QgsPostgresConn *mConn = nullptr;
 
 
@@ -129,8 +128,7 @@ class QgsPostgresFeatureIterator final: public QgsAbstractFeatureIteratorFromSou
     QgsCoordinateTransform mTransform;
     QgsRectangle mFilterRect;
     QgsGeometry mDistanceWithinGeom;
-    std::unique_ptr< QgsGeometryEngine > mDistanceWithinEngine;
-
+    std::unique_ptr<QgsGeometryEngine> mDistanceWithinEngine;
 };
 
 #endif // QGSPOSTGRESFEATUREITERATOR_H

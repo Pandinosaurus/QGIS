@@ -32,7 +32,6 @@
 class CORE_EXPORT QgsAnnotationMarkerItem : public QgsAnnotationItem
 {
   public:
-
     /**
      * Constructor for QgsAnnotationMarkerItem, at the specified \a point.
      */
@@ -43,17 +42,17 @@ class CORE_EXPORT QgsAnnotationMarkerItem : public QgsAnnotationItem
     void render( QgsRenderContext &context, QgsFeedback *feedback ) override;
     bool writeXml( QDomElement &element, QDomDocument &document, const QgsReadWriteContext &context ) const override;
     Qgis::AnnotationItemFlags flags() const override;
-    QList< QgsAnnotationItemNode > nodes() const override;
-    Qgis::AnnotationItemEditOperationResult applyEdit( QgsAbstractAnnotationItemEditOperation *operation ) override;
-    QgsAnnotationItemEditOperationTransientResults *transientEditResults( QgsAbstractAnnotationItemEditOperation *operation ) override SIP_FACTORY;
+    QList< QgsAnnotationItemNode > nodesV2( const QgsAnnotationItemEditContext &context ) const override;
+    Qgis::AnnotationItemEditOperationResult applyEditV2( QgsAbstractAnnotationItemEditOperation *operation, const QgsAnnotationItemEditContext &context ) override;
+    QgsAnnotationItemEditOperationTransientResults *transientEditResultsV2( QgsAbstractAnnotationItemEditOperation *operation, const QgsAnnotationItemEditContext &context ) override SIP_FACTORY;
 
     /**
      * Creates a new marker annotation item.
      */
-    static QgsAnnotationMarkerItem *create() SIP_FACTORY;
+    static std::unique_ptr<QgsAnnotationMarkerItem> create();
 
     bool readXml( const QDomElement &element, const QgsReadWriteContext &context ) override;
-    QgsAnnotationMarkerItem *clone() override SIP_FACTORY;
+    QgsAnnotationMarkerItem *clone() const override SIP_FACTORY;
     QgsRectangle boundingBox() const override;
     QgsRectangle boundingBox( QgsRenderContext &context ) const override;
 
@@ -92,14 +91,12 @@ class CORE_EXPORT QgsAnnotationMarkerItem : public QgsAnnotationItem
     void setSymbol( QgsMarkerSymbol *symbol SIP_TRANSFER );
 
   private:
-
     QgsPoint mPoint;
     std::unique_ptr< QgsMarkerSymbol > mSymbol;
 
 #ifdef SIP_RUN
     QgsAnnotationMarkerItem( const QgsAnnotationMarkerItem &other );
 #endif
-
 };
 
 #endif // QGSANNOTATIONMARKERITEM_H

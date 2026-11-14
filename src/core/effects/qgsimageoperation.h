@@ -18,13 +18,14 @@
 #ifndef QGSIMAGEOPERATION_H
 #define QGSIMAGEOPERATION_H
 
-#include <QImage>
-#include "qgis_sip.h"
-#include <QColor>
+#include <cmath>
 
 #include "qgis_core.h"
+#include "qgis_sip.h"
 #include "qgsfeedback.h"
-#include <cmath>
+
+#include <QColor>
+#include <QImage>
 
 class QgsColorRamp;
 class QgsFeedback;
@@ -32,7 +33,7 @@ class QgsFeedback;
 /**
  * \ingroup core
  * \class QgsImageOperation
- * \brief Contains operations and filters which apply to QImages
+ * \brief Contains operations and filters which apply to QImages.
  *
  * A set of optimised pixel manipulation operations and filters which can be applied
  * to QImages. All operations only apply to ARGB32 format images, and it is left up
@@ -42,22 +43,19 @@ class QgsFeedback;
  * Operations are written to either modify an image in place or return a new image, depending
  * on which is faster for the particular operation.
  *
- * \since QGIS 2.7
  */
 class CORE_EXPORT QgsImageOperation
 {
-
   public:
-
     /**
      * Modes for converting a QImage to grayscale
      */
     enum GrayscaleMode
     {
-      GrayscaleLightness, //!< Keep the lightness of the color, drops the saturation
+      GrayscaleLightness,  //!< Keep the lightness of the color, drops the saturation
       GrayscaleLuminosity, //!< Grayscale by perceptual luminosity (weighted sum of color RGB components)
-      GrayscaleAverage, //!< Grayscale by taking average of color RGB components
-      GrayscaleOff //!< No change
+      GrayscaleAverage,    //!< Grayscale by taking average of color RGB components
+      GrayscaleOff         //!< No change
     };
 
     /**
@@ -66,7 +64,7 @@ class CORE_EXPORT QgsImageOperation
     enum FlipType
     {
       FlipHorizontal, //!< Flip the image horizontally
-      FlipVertical //!< Flip the image vertically
+      FlipVertical    //!< Flip the image vertically
     };
 
     /**
@@ -99,8 +97,7 @@ class CORE_EXPORT QgsImageOperation
      * \param colorizeStrength double between 0 and 1, where 0 = no colorization and 1.0 = full colorization
      * \param feedback optional feedback object for responsive cancellation (since QGIS 3.22)
      */
-    static void adjustHueSaturation( QImage &image, double saturation, const QColor &colorizeColor = QColor(),
-                                     double colorizeStrength = 1.0, QgsFeedback *feedback = nullptr );
+    static void adjustHueSaturation( QImage &image, double saturation, const QColor &colorizeColor = QColor(), double colorizeStrength = 1.0, QgsFeedback *feedback = nullptr );
 
     /**
      * Multiplies opacity of image pixel values by a factor.
@@ -121,30 +118,29 @@ class CORE_EXPORT QgsImageOperation
     //! Struct for storing properties of a distance transform operation
     struct DistanceTransformProperties
     {
-
-      /**
+        /**
        * Set to TRUE to perform the distance transform on transparent pixels
        * in the source image, set to FALSE to perform the distance transform
        * on opaque pixels
        */
-      bool shadeExterior = true;
+        bool shadeExterior = true;
 
-      /**
+        /**
        * Set to TRUE to automatically calculate the maximum distance in the
        * transform to use as the spread value
        */
-      bool useMaxDistance = true;
+        bool useMaxDistance = true;
 
-      /**
+        /**
        * Maximum distance (in pixels) for the distance transform shading to
        * spread
        */
-      double spread = 10.0;
+        double spread = 10.0;
 
-      /**
+        /**
        * Color ramp to use for shading the distance transform
        */
-      QgsColorRamp *ramp = nullptr;
+        QgsColorRamp *ramp = nullptr;
     };
 
     /**
@@ -178,7 +174,7 @@ class CORE_EXPORT QgsImageOperation
      * \returns blurred image
      * \note for fastest operation, ensure the source image is ARGB32_Premultiplied
      */
-    static QImage *gaussianBlur( QImage &image, int radius, QgsFeedback *feedback = nullptr ) SIP_FACTORY;
+    static QImage gaussianBlur( QImage &image, int radius, QgsFeedback *feedback = nullptr );
 
     /**
      * Flips an image horizontally or vertically
@@ -195,7 +191,6 @@ class CORE_EXPORT QgsImageOperation
      * it will be centered in the returned rectangle.
      * \param center return rectangle will be centered on the center of the original image if set to TRUE
      * \see cropTransparent
-     * \since QGIS 2.9
      */
     static QRect nonTransparentImageRect( const QImage &image, QSize minSize = QSize(), bool center = false );
 
@@ -206,98 +201,125 @@ class CORE_EXPORT QgsImageOperation
      * cropped image is smaller than the minimum size, it will be centered
      * in the returned image.
      * \param center cropped image will be centered on the center of the original image if set to TRUE
-     * \since QGIS 2.9
      */
     static QImage cropTransparent( const QImage &image, QSize minSize = QSize(), bool center = false );
 
-  private:
+    /**
+     * Tests whether an \a image is completely blank, i.e. it consists entirely of completely transparent pixels.
+     *
+     * Only the alpha channel for pixels are tested, and a pixel is considered empty if the alpha value is equal
+     * to 0.
+     *
+     * \see isSingleColor()
+     * \since QGIS 4.4
+     */
+    static bool isBlankImage( const QImage &image );
 
+    /**
+     * Tests whether an \a image is consists only of pixels matching the specified \a color.
+     *
+     * \see isBlankImage()
+     * \since QGIS 4.4
+     */
+    static bool isSingleColor( const QImage &image, const QColor &color );
+
+    /**
+     * Performs a flood fill operation on an image, replacing contiguous areas of the same color.
+     *
+     * \param image image to process
+     * \param startPoint the starting pixel coordinate for the fill
+     * \param newColor the color to fill the contiguous area with
+     * \param tolerance tolerance for color matching (0-255). A value of 0 means exact matches only.
+     * \param feedback optional feedback object for responsive cancellation
+     */
+    static QImage floodFill( const QImage &image, const QPoint &startPoint, const QColor &newColor, int tolerance = 0, QgsFeedback *feedback = nullptr );
+
+  private:
     //for blocked operations
     enum LineOperationDirection
     {
       ByRow,
       ByColumn
     };
-    template <class BlockOperation> static void runBlockOperationInThreads( QImage &image, BlockOperation &operation, LineOperationDirection direction );
+    template<class BlockOperation> static void runBlockOperationInThreads( QImage &image, BlockOperation &operation, LineOperationDirection direction );
     struct ImageBlock
     {
-      unsigned int beginLine;
-      unsigned int endLine;
-      unsigned int lineLength;
-      QImage *image = nullptr;
+        unsigned int beginLine;
+        unsigned int endLine;
+        unsigned int lineLength;
+        QImage *image = nullptr;
     };
 
     //for rect operations
-    template <typename RectOperation> static void runRectOperation( QImage &image, RectOperation &operation );
-    template <class RectOperation> static void runRectOperationOnWholeImage( QImage &image, RectOperation &operation );
+    template<typename RectOperation> static void runRectOperation( QImage &image, RectOperation &operation );
+    template<class RectOperation> static void runRectOperationOnWholeImage( QImage &image, RectOperation &operation );
 
     //for per pixel operations
-    template <class PixelOperation> static void runPixelOperation( QImage &image, PixelOperation &operation, QgsFeedback *feedback = nullptr );
-    template <class PixelOperation> static void runPixelOperationOnWholeImage( QImage &image, PixelOperation &operation, QgsFeedback *feedback = nullptr );
-    template <class PixelOperation>
-    struct ProcessBlockUsingPixelOperation
+    template<class PixelOperation> static void runPixelOperation( QImage &image, PixelOperation &operation, QgsFeedback *feedback = nullptr );
+    template<class PixelOperation> static void runPixelOperationOnWholeImage( QImage &image, PixelOperation &operation, QgsFeedback *feedback = nullptr );
+    template<class PixelOperation> struct ProcessBlockUsingPixelOperation
     {
-      explicit ProcessBlockUsingPixelOperation( PixelOperation &operation, QgsFeedback *feedback )
-        : mOperation( operation )
-        , mFeedback( feedback )
-      { }
+        explicit ProcessBlockUsingPixelOperation( PixelOperation &operation, QgsFeedback *feedback )
+          : mOperation( operation )
+          , mFeedback( feedback )
+        {}
 
-      typedef void result_type;
+        typedef void result_type;
 
-      void operator()( ImageBlock &block )
-      {
-        for ( unsigned int y = block.beginLine; y < block.endLine; ++y )
-        {
-          if ( mFeedback && mFeedback->isCanceled() )
-            break;
-
-          QRgb *ref = reinterpret_cast< QRgb * >( block.image->scanLine( y ) );
-          for ( unsigned int x = 0; x < block.lineLength; ++x )
-          {
-            mOperation( ref[x], x, y );
-          }
-        }
-      }
-
-      PixelOperation &mOperation;
-      QgsFeedback *mFeedback = nullptr;
-    };
-
-    //for linear operations
-    template <typename LineOperation> static void runLineOperation( QImage &image, LineOperation &operation, QgsFeedback *feedback = nullptr );
-    template <class LineOperation> static void runLineOperationOnWholeImage( QImage &image, LineOperation &operation, QgsFeedback *feedback = nullptr );
-    template <class LineOperation>
-    struct ProcessBlockUsingLineOperation
-    {
-      explicit ProcessBlockUsingLineOperation( LineOperation &operation )
-        : mOperation( operation ) { }
-
-      typedef void result_type;
-
-      void operator()( ImageBlock &block )
-      {
-        //do something with whole lines
-        int bpl = block.image->bytesPerLine();
-        if ( mOperation.direction() == ByRow )
+        void operator()( ImageBlock &block )
         {
           for ( unsigned int y = block.beginLine; y < block.endLine; ++y )
           {
-            QRgb *ref = reinterpret_cast< QRgb * >( block.image->scanLine( y ) );
-            mOperation( ref, block.lineLength, bpl );
-          }
-        }
-        else
-        {
-          //by column
-          unsigned char *ref = block.image->scanLine( 0 ) + 4 * block.beginLine;
-          for ( unsigned int x = block.beginLine; x < block.endLine; ++x, ref += 4 )
-          {
-            mOperation( reinterpret_cast< QRgb * >( ref ), block.lineLength, bpl );
-          }
-        }
-      }
+            if ( mFeedback && mFeedback->isCanceled() )
+              break;
 
-      LineOperation &mOperation;
+            QRgb *ref = reinterpret_cast< QRgb * >( block.image->scanLine( y ) );
+            for ( unsigned int x = 0; x < block.lineLength; ++x )
+            {
+              mOperation( ref[x], x, y );
+            }
+          }
+        }
+
+        PixelOperation &mOperation;
+        QgsFeedback *mFeedback = nullptr;
+    };
+
+    //for linear operations
+    template<typename LineOperation> static void runLineOperation( QImage &image, LineOperation &operation, QgsFeedback *feedback = nullptr );
+    template<class LineOperation> static void runLineOperationOnWholeImage( QImage &image, LineOperation &operation, QgsFeedback *feedback = nullptr );
+    template<class LineOperation> struct ProcessBlockUsingLineOperation
+    {
+        explicit ProcessBlockUsingLineOperation( LineOperation &operation )
+          : mOperation( operation )
+        {}
+
+        typedef void result_type;
+
+        void operator()( ImageBlock &block )
+        {
+          //do something with whole lines
+          int bpl = block.image->bytesPerLine();
+          if ( mOperation.direction() == ByRow )
+          {
+            for ( unsigned int y = block.beginLine; y < block.endLine; ++y )
+            {
+              QRgb *ref = reinterpret_cast< QRgb * >( block.image->scanLine( y ) );
+              mOperation( ref, block.lineLength, bpl );
+            }
+          }
+          else
+          {
+            //by column
+            unsigned char *ref = block.image->scanLine( 0 ) + 4 * block.beginLine;
+            for ( unsigned int x = block.beginLine; x < block.endLine; ++x, ref += 4 )
+            {
+              mOperation( reinterpret_cast< QRgb * >( ref ), block.lineLength, bpl );
+            }
+          }
+        }
+
+        LineOperation &mOperation;
     };
 
 
@@ -308,9 +330,9 @@ class CORE_EXPORT QgsImageOperation
       public:
         explicit GrayscalePixelOperation( const GrayscaleMode mode )
           : mMode( mode )
-        {  }
+        {}
 
-        void operator()( QRgb &rgb, int x, int y );
+        void operator()( QRgb &rgb, int x, int y ) const;
 
       private:
         GrayscaleMode mMode;
@@ -326,9 +348,9 @@ class CORE_EXPORT QgsImageOperation
         BrightnessContrastPixelOperation( const int brightness, const double contrast )
           : mBrightness( brightness )
           , mContrast( contrast )
-        {  }
+        {}
 
-        void operator()( QRgb &rgb, int x, int y );
+        void operator()( QRgb &rgb, int x, int y ) const;
 
       private:
         int mBrightness;
@@ -339,17 +361,15 @@ class CORE_EXPORT QgsImageOperation
     class HueSaturationPixelOperation
     {
       public:
-        HueSaturationPixelOperation( const double saturation, const bool colorize,
-                                     const int colorizeHue, const int colorizeSaturation,
-                                     const double colorizeStrength )
+        HueSaturationPixelOperation( const double saturation, const bool colorize, const int colorizeHue, const int colorizeSaturation, const double colorizeStrength )
           : mSaturation( saturation )
           , mColorize( colorize )
           , mColorizeHue( colorizeHue )
           , mColorizeSaturation( colorizeSaturation )
           , mColorizeStrength( colorizeStrength )
-        {  }
+        {}
 
-        void operator()( QRgb &rgb, int x, int y );
+        void operator()( QRgb &rgb, int x, int y ) const;
 
       private:
         double mSaturation; // [0, 2], 1 = no change
@@ -366,9 +386,9 @@ class CORE_EXPORT QgsImageOperation
       public:
         explicit MultiplyOpacityPixelOperation( const double factor )
           : mFactor( factor )
-        { }
+        {}
 
-        void operator()( QRgb &rgb, int x, int y );
+        void operator()( QRgb &rgb, int x, int y ) const;
 
       private:
         double mFactor;
@@ -381,8 +401,7 @@ class CORE_EXPORT QgsImageOperation
           : mWidth( width )
           , mArray( array )
           , mExterior( exterior )
-        {
-        }
+        {}
 
         void operator()( QRgb &rgb, int x, int y );
 
@@ -395,8 +414,7 @@ class CORE_EXPORT QgsImageOperation
     class ShadeFromArrayOperation
     {
       public:
-        ShadeFromArrayOperation( const int width, double *array, const double spread,
-                                 const DistanceTransformProperties &properties )
+        ShadeFromArrayOperation( const int width, double *array, const double spread, const DistanceTransformProperties &properties )
           : mWidth( width )
           , mArray( array )
           , mSpread( spread )
@@ -429,11 +447,11 @@ class CORE_EXPORT QgsImageOperation
           , mi1( i1 )
           , mi2( i2 )
           , mFeedback( feedback )
-        { }
+        {}
 
         typedef void result_type;
 
-        LineOperationDirection direction() { return mDirection; }
+        LineOperationDirection direction() const { return mDirection; }
 
         void operator()( QRgb *startRef, int lineLength, int bytesPerLine )
         {
@@ -445,7 +463,7 @@ class CORE_EXPORT QgsImageOperation
           int increment = ( mDirection == QgsImageOperation::ByRow ) ? 4 : bytesPerLine;
           if ( !mForwardDirection )
           {
-            p += ( lineLength - 1 ) * increment;
+            p += static_cast< std::size_t >( lineLength - 1 ) * increment;
             increment = -increment;
           }
 
@@ -502,8 +520,8 @@ class CORE_EXPORT QgsImageOperation
         double *mKernel = nullptr;
         QgsFeedback *mFeedback = nullptr;
 
-        inline QRgb gaussianBlurVertical( int posy, unsigned char *sourceFirstLine, int sourceBpl, int height );
-        inline QRgb gaussianBlurHorizontal( int posx, unsigned char *sourceFirstLine, int width );
+        inline QRgb gaussianBlurVertical( int posy, unsigned char *sourceFirstLine, int sourceBpl, int height ) const;
+        inline QRgb gaussianBlurHorizontal( int posx, unsigned char *sourceFirstLine, int width ) const;
     };
 
     //flip
@@ -514,20 +532,17 @@ class CORE_EXPORT QgsImageOperation
       public:
         explicit FlipLineOperation( LineOperationDirection direction )
           : mDirection( direction )
-        { }
+        {}
 
         typedef void result_type;
 
-        LineOperationDirection direction() { return mDirection; }
+        LineOperationDirection direction() const { return mDirection; }
 
-        void operator()( QRgb *startRef, int lineLength, int bytesPerLine );
+        void operator()( QRgb *startRef, int lineLength, int bytesPerLine ) const;
 
       private:
         LineOperationDirection mDirection;
     };
-
-
 };
 
 #endif // QGSIMAGEOPERATION_H
-

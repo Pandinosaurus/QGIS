@@ -17,11 +17,11 @@
 
 #include "qgsdimensionfilter.h"
 
-QgsDimensionFilter::QgsDimensionFilter( const QMap<const QgsVectorLayer *, QStringList> dimensionFilter )
-  : mDimensionFilter( dimensionFilter )
-{
+#include "qgsfeaturerequest.h"
 
-}
+QgsDimensionFilter::QgsDimensionFilter( const QHash<const QgsVectorLayer *, QStringList> dimensionFilter )
+  : mDimensionFilter( dimensionFilter )
+{}
 
 void QgsDimensionFilter::filterFeatures( const QgsVectorLayer *layer, QgsFeatureRequest &featureRequest ) const
 {

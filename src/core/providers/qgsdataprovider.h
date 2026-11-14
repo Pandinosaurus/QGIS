@@ -17,16 +17,19 @@
 #define QQGSDATAPROVIDER_H
 
 #include "qgis_core.h"
+#include "qgscoordinatetransformcontext.h"
+#include "qgsdataproviderelevationproperties.h"
+#include "qgsdatasourceuri.h"
+#include "qgserror.h"
+#include "qgslayermetadata.h"
+
 #include <QDateTime>
+#include <QMutex>
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <QMutex>
 
-#include "qgsdatasourceuri.h"
-#include "qgscoordinatetransformcontext.h"
-#include "qgslayermetadata.h"
-#include "qgserror.h"
+using namespace Qt::StringLiterals;
 
 class QgsRectangle;
 class QgsCoordinateReferenceSystem;
@@ -39,7 +42,6 @@ class QgsDataProviderTemporalCapabilities;
  */
 class CORE_EXPORT QgsDataProvider : public QObject
 {
-
 #ifdef SIP_RUN
     SIP_CONVERT_TO_SUBCLASS_CODE
     if ( qobject_cast<QgsVectorDataProvider *>( sipCpp ) )
@@ -64,24 +66,11 @@ class CORE_EXPORT QgsDataProvider : public QObject
     }
     SIP_END
 #endif
-    Q_OBJECT
+
+    // clang-format off
+  Q_OBJECT
 
   public:
-
-    // TODO QGIS 4: (re)move DataCapability as this enum is really meant for data items rather than data providers
-
-    /**
-     * Used in browser model to understand which items for which providers should be populated
-     */
-    enum DataCapability
-    {
-      NoDataCapabilities  = 0,
-      File                = 1,
-      Dir                 = 1 << 1,
-      Database            = 1 << 2,
-      Net                 = 1 << 3  // Internet source
-    };
-    Q_DECLARE_FLAGS( DataCapabilities, DataCapability )
 
     /**
      * Properties are used to pass custom configuration options into data providers.
@@ -92,10 +81,10 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     enum ProviderProperty
     {
-      EvaluateDefaultValues,       //!< Evaluate default values on provider side when calling QgsVectorDataProvider::defaultValue( int index ) rather than on commit.
-      CustomData   = 3000          //!< Custom properties for 3rd party providers or very provider-specific properties which are not expected to be of interest for other providers can be added starting from this value up.
+      EvaluateDefaultValues, //!< Evaluate default values on provider side when calling QgsVectorDataProvider::defaultValue( int index ) rather than on commit.
+      CustomData = 3000 //!< Custom properties for 3rd party providers or very provider-specific properties which are not expected to be of interest for other providers can be added starting from this value up.
     };
-
+    // clang-format on
 
     /**
      * Setting options for creating vector data providers.
@@ -106,35 +95,20 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     struct ProviderOptions
     {
-
-      /**
+        /**
        * Coordinate transform context
        */
-      QgsCoordinateTransformContext transformContext;
-
+        QgsCoordinateTransformContext transformContext;
     };
-
-    /**
-     * Flags which control dataprovider construction.
-     * \since QGIS 3.16
-     */
-    enum ReadFlag
-    {
-      FlagTrustDataSource = 1 << 0, //!< Trust datasource config (primary key unicity, geometry type and srid, etc). Improves provider load time by skipping expensive checks like primary key unicity, geometry type and srid and by using estimated metadata on data load. Since QGIS 3.16
-      SkipFeatureCount = 1 << 1, //!< Make featureCount() return -1 to indicate unknown, and subLayers() to return a unknown feature count as well. Since QGIS 3.18. Only implemented by OGR provider at time of writing.
-      FlagLoadDefaultStyle = 1 << 2, //!< Reset the layer's style to the default for the datasource
-      SkipGetExtent = 1 << 3, //!< Skip the extent from provider
-    };
-    Q_DECLARE_FLAGS( ReadFlags, ReadFlag )
 
     /**
      * Create a new dataprovider with the specified in the \a uri.
      *
      * Additional creation options are specified within the \a options value and since QGIS 3.16 creation flags are specified within the \a flags value.
      */
-    QgsDataProvider( const QString &uri = QString(),
-                     const QgsDataProvider::ProviderOptions &providerOptions = QgsDataProvider::ProviderOptions(),
-                     QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
+    QgsDataProvider(
+      const QString &uri = QString(), const QgsDataProvider::ProviderOptions &providerOptions = QgsDataProvider::ProviderOptions(), Qgis::DataProviderReadFlags flags = Qgis::DataProviderReadFlags()
+    );
 
     /**
      * Returns the coordinate system for the data source.
@@ -148,10 +122,7 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * connection string
      * \param uri source specification
      */
-    virtual void setDataSourceUri( const QString &uri )
-    {
-      mDataSourceURI = uri;
-    }
+    virtual void setDataSourceUri( const QString &uri ) { mDataSourceURI = uri; }
 
     /**
      * Gets the data source specification. This may be a path or database
@@ -164,7 +135,7 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     virtual QString dataSourceUri( bool expandAuthConfig = false ) const
     {
-      if ( expandAuthConfig && mDataSourceURI.contains( QLatin1String( "authcfg" ) ) )
+      if ( expandAuthConfig && mDataSourceURI.contains( "authcfg"_L1 ) )
       {
         const QgsDataSourceUri uri( mDataSourceURI );
         return uri.uri( expandAuthConfig );
@@ -184,26 +155,52 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     virtual QString dataComment() const { return QString(); };
 
+    /**
+     * Obtain a formatted HTML string containing assorted metadata for this data provider.
+     *
+     * \since QGIS 3.36
+     */
+    virtual QString htmlMetadata() const;
+
+    /**
+     * Returns provider specific metadata.
+     *
+     * This returned map contains metadata which is dependent on the provider type.
+     * The returned keys are considered to be stable API for the provider, and can safely
+     * be used to retrieve properties which make sense for a particular provider only
+     * (e.g. backend server-specific properties).
+     *
+     * \note Prior to QGIS 4.0 this method was available for QgsVectorDataProvider only.
+     * \note The default implementation returns an empty variant map.
+     * \since QGIS 4.0
+     */
+    virtual QVariantMap metadata() const { return QVariantMap(); }
 
     /**
      * Set the data source specification.
      *
-     * \since QGIS 3.0
      */
-    void setUri( const QgsDataSourceUri &uri )
-    {
-      mDataSourceURI = uri.uri( true );
-    }
+    void setUri( const QgsDataSourceUri &uri ) { mDataSourceURI = uri.uri( true ); }
+
+    /**
+     * Set the data source specification.
+     *
+     * \since QGIS 3.38
+     */
+    void setUri( const QString &uri ) { mDataSourceURI = uri; }
 
     /**
      * Gets the data source specification.
      *
-     * \since QGIS 3.0
      */
-    QgsDataSourceUri uri() const
-    {
-      return QgsDataSourceUri( mDataSourceURI );
-    }
+    QgsDataSourceUri uri() const { return QgsDataSourceUri( mDataSourceURI ); }
+
+    /**
+     * Returns the generic data provider flags.
+     *
+     * \since QGIS 3.26
+     */
+    virtual Qgis::DataProviderFlags flags() const;
 
     /**
      * Returns the provider's temporal capabilities.
@@ -224,11 +221,44 @@ class CORE_EXPORT QgsDataProvider : public QObject
     virtual const QgsDataProviderTemporalCapabilities *temporalCapabilities() const SIP_SKIP;
 
     /**
-     * Returns the extent of the layer
-     * \returns QgsRectangle containing the extent of the layer
+     * Returns the provider's elevation properties.
+     *
+     * This may be NULLPTR, depending on the data provider.
+     *
+     * \since QGIS 3.32
+     */
+    virtual QgsDataProviderElevationProperties *elevationProperties();
+
+    /**
+     * Returns the provider's elevation properties.
+     *
+     * This may be NULLPTR, depending on the data provider.
+     *
+     * \since QGIS 3.32
+     */
+    virtual const QgsDataProviderElevationProperties *elevationProperties() const SIP_SKIP;
+
+    /**
+     * Returns the extent of the layer.
+     *
+     * \warning This may be expensive to calculate for some data providers, as it may involve
+     * additional network requests or in some cases, iterating through all the features in a layer.
+     * If the provider returns the Qgis::DataProviderFlag::FastExtent2D flag from the flags() method
+     * then the call to extent() is guaranteed to ALWAYS be fast and not involve any additional work.
      */
     virtual QgsRectangle extent() const = 0;
 
+    /**
+     * Returns the 3D extent of the layer.
+     *
+     * \warning This may be expensive to calculate for some data providers, as it may involve
+     * additional network requests or in some cases, iterating through all the features in a layer.
+     * If the provider returns the Qgis::DataProviderFlag::FastExtent3D flag from the flags() method
+     * then the call to extent3D() is guaranteed to ALWAYS be fast and not involve any additional work.
+     *
+     * \since QGIS 3.36
+     */
+    virtual QgsBox3D extent3D() const { return extent().toBox3d( std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN() ); }
 
     /**
      * Returns TRUE if this is a valid layer. It is up to individual providers
@@ -244,38 +274,74 @@ class CORE_EXPORT QgsDataProvider : public QObject
       // NOP by default
     }
 
+    /**
+     * Returns a user-friendly string describing the dialect which is supported for subset strings
+     * by the provider.
+     *
+     * \see subsetStringHelpUrl()
+     * \see supportsSubsetString()
+     * \see setSubsetString()
+     * \see subsetString()
+     *
+     * \since QGIS 3.40
+     */
+    virtual QString subsetStringDialect() const;
 
     /**
-     * Set the subset string used to create a subset of features in
-     * the layer. This may be a sql where clause or any other string
-     * that can be used by the data provider to create a subset.
-     * Must be implemented in the dataprovider.
+     * Returns a URL pointing to documentation describing the dialect which is supported for subset strings
+     * by the provider.
+     *
+     * \see subsetStringDialect()
+     * \see supportsSubsetString()
+     * \see setSubsetString()
+     * \see subsetString()
+     *
+     * \since QGIS 3.40
      */
-    virtual bool setSubsetString( const QString &subset, bool updateFeatureCount = true )
-    {
-      // NOP by default
-      Q_UNUSED( subset )
-      Q_UNUSED( updateFeatureCount )
-      return false;
-    }
+    virtual QString subsetStringHelpUrl() const;
 
+    /**
+     * Set the \a subset string used to create a subset of features in
+     * the layer.
+     *
+     * This may be a SQL where clause, or any other string that can be used by the data provider to create a subset.
+     * See subsetStringDialect() and subsetStringHelpUrl() for additional metadata on the dialect supported
+     * by the subset string.
+     *
+     * Must be implemented in the data provider.
+     *
+     * \see subsetString()
+     * \see subsetStringDialect()
+     * \see subsetStringHelpUrl()
+     * \see supportsSubsetString()
+     */
+    virtual bool setSubsetString( const QString &subset, bool updateFeatureCount = true );
 
     /**
      * Returns TRUE if the provider supports setting of subset strings.
+     *
+     * \see subsetString()
+     * \see setSubsetString()
     */
-    virtual bool supportsSubsetString() const { return false; }
+    virtual bool supportsSubsetString() const;
 
     /**
-     * Returns the subset definition string (typically sql) currently in
+     * Returns the subset definition string currently in
      * use by the layer and used by the provider to limit the feature set.
-     * Must be overridden in the dataprovider, otherwise returns a null
-     * QString.
+     *
+     * This may be a SQL where clause, or any other string that can be used by the data provider to create a subset.
+     * See subsetStringDialect() and subsetStringHelpUrl() for additional metadata on the dialect supported
+     * by the subset string.
+     *
+     * Must be overridden in the data provider, otherwise returns an empty
+     * string.
+     *
+     * \see setSubsetString()
+     * \see subsetStringDialect()
+     * \see subsetStringHelpUrl()
+     * \see supportsSubsetString()
      */
-    virtual QString subsetString() const
-    {
-      return QString();
-    }
-
+    virtual QString subsetString() const;
 
     /**
      * Sub-layers handled by this provider, in order from bottom to top
@@ -287,7 +353,7 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     virtual QStringList subLayers() const
     {
-      return QStringList();  // Empty
+      return QStringList(); // Empty
     }
 
     /**
@@ -299,17 +365,14 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     virtual QStringList subLayerStyles() const
     {
-      return QStringList();  // Empty
+      return QStringList(); // Empty
     }
 
 
     /**
      * Returns the number of layers for the current data source
      */
-    virtual uint subLayerCount() const
-    {
-      return 0;
-    }
+    virtual uint subLayerCount() const { return 0; }
 
 
     /**
@@ -342,6 +405,10 @@ class CORE_EXPORT QgsDataProvider : public QObject
     }
 
 
+    // TODO? Instead of being pure virtual, might be better to generalize this
+    // behavior and presume that none of the sub-classes are going to do
+    // anything strange with regards to their name or description?
+
     /**
      * Returns a provider name
      *
@@ -349,13 +416,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * dialogs so that providers can be shown with their supported types. Thus
      * if more than one provider supports a given format, the user is able to
      * select a specific provider to open that file.
-     *
-     * \note
-     *
-     * Instead of being pure virtual, might be better to generalize this
-     * behavior and presume that none of the sub-classes are going to do
-     * anything strange with regards to their name or description?
-     *
      */
     virtual QString name() const = 0;
 
@@ -364,13 +424,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Returns description
      *
      * Returns a terse string describing what the provider is.
-     *
-     * \note
-     *
-     * Instead of being pure virtual, might be better to generalize this
-     * behavior and presume that none of the sub-classes are going to do
-     * anything strange with regards to their name or description?
-     *
      */
     virtual QString description() const = 0;
 
@@ -382,13 +435,8 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * supported by the data provider.  Naturally this will be an empty string
      * for those data providers that do not deal with plain files, such as
      * databases and servers.
-     *
-     * \note It'd be nice to eventually be raster/vector neutral.
      */
-    virtual QString fileVectorFilters() const
-    {
-      return QString();
-    }
+    virtual QString fileVectorFilters() const { return QString(); }
 
 
     /**
@@ -398,15 +446,10 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * supported by the data provider.  Naturally this will be an empty string
      * for those data providers that do not deal with plain files, such as
      * databases and servers.
-     *
-     * \note It'd be nice to eventually be raster/vector neutral.
      */
-    virtual QString fileRasterFilters() const
-    {
-      return QString();
-    }
+    virtual QString fileRasterFilters() const { return QString(); }
 
-    // TODO QGIS 4 -> Make `reloadData()` non virtual. This should be implemented in `reloadProviderData()`.
+    // TODO QGIS 5 -> Make `reloadData()` non virtual. This should be implemented in `reloadProviderData()`.
 
     /**
      * Reloads the data from the source for providers with data caches to synchronize,
@@ -432,7 +475,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
 
     /**
      * Invalidate connections corresponding to specified name
-     * \since QGIS 2.16
      */
     virtual void invalidateConnections( const QString &connection ) { Q_UNUSED( connection ) }
 
@@ -456,7 +498,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      * \returns TRUE in case of success (or no-op implementation), FALSE in case of failure.
      *
-     * \since QGIS 2.16
      */
     virtual bool enterUpdateMode() { return true; }
 
@@ -475,7 +516,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      * \returns TRUE in case of success (or no-op implementation), FALSE in case of failure.
      *
-     * \since QGIS 2.16
      */
     virtual bool leaveUpdateMode() { return true; }
 
@@ -483,7 +523,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Allows setting arbitrary properties on the provider.
      * It depends on the provider which properties are supported.
      *
-     * \since QGIS 2.16
      */
     void setProviderProperty( ProviderProperty property, const QVariant &value );
 
@@ -491,7 +530,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Allows setting arbitrary properties on the provider.
      * It depends on the provider which properties are supported.
      *
-     * \since QGIS 2.16
      */
     void setProviderProperty( int property, const QVariant &value ); // SIP_SKIP
 
@@ -499,7 +537,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Gets the current value of a certain provider property.
      * It depends on the provider which properties are supported.
      *
-     * \since QGIS 2.16
      */
     QVariant providerProperty( ProviderProperty property, const QVariant &defaultValue = QVariant() ) const;
 
@@ -507,7 +544,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Gets the current value of a certain provider property.
      * It depends on the provider which properties are supported.
      *
-     * \since QGIS 2.16
      */
     QVariant providerProperty( int property, const QVariant &defaultValue ) const; // SIP_SKIP
 
@@ -519,7 +555,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      * \see notify
      *
-     * \since QGIS 3.0
      */
     virtual void setListening( bool isListening );
 
@@ -528,15 +563,14 @@ class CORE_EXPORT QgsDataProvider : public QObject
     /**
      * Stores settings related to the context in which a preview job runs.
      * \note Not available in Python bindings
-     * \since QGIS 3.0
      */
     struct PreviewContext
     {
-      //! Previous rendering time for the layer, in ms
-      double lastRenderingTimeMs = -1;
+        //! Previous rendering time for the layer, in ms
+        double lastRenderingTimeMs = -1;
 
-      //! Default maximum allowable render time, in ms
-      double maxRenderingTimeMs = MAXIMUM_LAYER_PREVIEW_TIME_MS;
+        //! Default maximum allowable render time, in ms
+        double maxRenderingTimeMs = Qgis::MAXIMUM_LAYER_PREVIEW_TIME_MS;
     };
 #endif
 
@@ -550,7 +584,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      *
      * \note not available in Python bindings
-     * \since QGIS 3.0
      */
     virtual bool renderInPreview( const QgsDataProvider::PreviewContext &context ); // SIP_SKIP
 
@@ -560,7 +593,6 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * Individual data providers must implement this method if they support collecting metadata.
      *
      * \see writeLayerMetadata()
-     * \since QGIS 3.0
     */
     virtual QgsLayerMetadata layerMetadata() const { return QgsLayerMetadata(); }
 
@@ -570,9 +602,12 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      * Returns TRUE if metadata was successfully written to the data provider.
      * \see layerMetadata()
-     * \since QGIS 3.0
     */
-    virtual bool writeLayerMetadata( const QgsLayerMetadata &metadata ) { Q_UNUSED( metadata ) return false; }
+    virtual bool writeLayerMetadata( const QgsLayerMetadata &metadata )
+    {
+      Q_UNUSED( metadata )
+      return false;
+    }
 
     /**
      * Returns data provider coordinate transform context
@@ -603,6 +638,13 @@ class CORE_EXPORT QgsDataProvider : public QObject
      */
     static QString sublayerSeparator();
 
+    /**
+     * Returns the style storage capabilities.
+     *
+     * \since QGIS 3.34
+     */
+    virtual Qgis::ProviderStyleStorageCapabilities styleStorageCapabilities() const;
+
   signals:
 
     /**
@@ -632,13 +674,11 @@ class CORE_EXPORT QgsDataProvider : public QObject
      *
      * \see setListening
      *
-     * \since QGIS 3.0
      */
     void notify( const QString &msg );
 
 
   protected:
-
     /**
      * Timestamp of data in the moment when the data were loaded by provider.
      */
@@ -651,13 +691,12 @@ class CORE_EXPORT QgsDataProvider : public QObject
     void appendError( const QgsErrorMessage &message ) { mError.append( message ); }
 
     //! Sets error message
-    void setError( const QgsError &error ) { mError = error;}
+    void setError( const QgsError &error ) { mError = error; }
 
     //! Read flags. It's up to the subclass to respect these when needed
-    QgsDataProvider::ReadFlags mReadFlags = QgsDataProvider::ReadFlags();
+    Qgis::DataProviderReadFlags mReadFlags;
 
   private:
-
     /**
      * Universal Resource Identifier for source data.
      * This could be a file, database, or server address.
@@ -678,8 +717,8 @@ class CORE_EXPORT QgsDataProvider : public QObject
      * \since QGIS 3.12
     */
     virtual void reloadProviderData() {}
-};
 
-Q_DECLARE_OPERATORS_FOR_FLAGS( QgsDataProvider::ReadFlags )
+    friend class TestQgsProject;
+};
 
 #endif

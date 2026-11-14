@@ -14,30 +14,117 @@
  ***************************************************************************/
 
 #include "qgslegendsettings.h"
-#include "qgsexpressioncontext.h"
+
 #include "qgsexpression.h"
+#include "qgsexpressioncontext.h"
+#include "qgspainting.h"
 #include "qgsrendercontext.h"
 
 #include <QPainter>
 
 QgsLegendSettings::QgsLegendSettings()
-  : mFontColor( QColor( 0, 0, 0 ) )
-  , mSymbolSize( 7, 4 )
+  : mSymbolSize( 7, 4 )
   , mWmsLegendSize( 50, 25 )
   , mRasterStrokeColor( Qt::black )
 {
-  rstyle( QgsLegendStyle::Title ).setMargin( QgsLegendStyle::Bottom, 3.5 );
-  rstyle( QgsLegendStyle::Group ).setMargin( QgsLegendStyle::Top, 3 );
-  rstyle( QgsLegendStyle::Subgroup ).setMargin( QgsLegendStyle::Top, 3 );
-  rstyle( QgsLegendStyle::Symbol ).setMargin( QgsLegendStyle::Top, 2.5 );
-  rstyle( QgsLegendStyle::SymbolLabel ).setMargin( QgsLegendStyle::Top, 2 );
-  rstyle( QgsLegendStyle::SymbolLabel ).setMargin( QgsLegendStyle::Left, 2 );
-  rstyle( QgsLegendStyle::Title ).rfont().setPointSizeF( 16.0 );
-  rstyle( QgsLegendStyle::Group ).rfont().setPointSizeF( 14.0 );
-  rstyle( QgsLegendStyle::Subgroup ).rfont().setPointSizeF( 12.0 );
-  rstyle( QgsLegendStyle::SymbolLabel ).rfont().setPointSizeF( 12.0 );
-  rstyle( QgsLegendStyle::Group ).setIndent( 0.0 );
-  rstyle( QgsLegendStyle::Subgroup ).setIndent( 0.0 );
+  mStyleMap.resize( static_cast< int >( Qgis::LegendComponent::SymbolLabel ) + 1 );
+
+  rstyle( Qgis::LegendComponent::Title ).setMargin( QgsLegendStyle::Bottom, 3.5 );
+  rstyle( Qgis::LegendComponent::Group ).setMargin( QgsLegendStyle::Top, 3 );
+  rstyle( Qgis::LegendComponent::Subgroup ).setMargin( QgsLegendStyle::Top, 3 );
+  rstyle( Qgis::LegendComponent::Symbol ).setMargin( QgsLegendStyle::Top, 2.5 );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).setMargin( QgsLegendStyle::Top, 2 );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).setMargin( QgsLegendStyle::Left, 2 );
+  rstyle( Qgis::LegendComponent::Group ).setIndent( 0.0 );
+  rstyle( Qgis::LegendComponent::Subgroup ).setIndent( 0.0 );
+
+  QgsTextFormat f = rstyle( Qgis::LegendComponent::Title ).textFormat();
+  f.setSize( 16.0 );
+  f.setSizeUnit( Qgis::RenderUnit::Points );
+  // these default line heights are not ideal, but needed to maintain api
+  f.setLineHeight( 1.1 );
+  f.setLineHeightUnit( Qgis::RenderUnit::Percentage );
+  rstyle( Qgis::LegendComponent::Title ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::Group ).textFormat();
+  f.setSize( 14.0 );
+  f.setSizeUnit( Qgis::RenderUnit::Points );
+  f.setLineHeight( 1.1 );
+  f.setLineHeightUnit( Qgis::RenderUnit::Percentage );
+  rstyle( Qgis::LegendComponent::Group ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::Subgroup ).textFormat();
+  f.setSize( 12.0 );
+  f.setSizeUnit( Qgis::RenderUnit::Points );
+  f.setLineHeight( 1.1 );
+  f.setLineHeightUnit( Qgis::RenderUnit::Percentage );
+  rstyle( Qgis::LegendComponent::Subgroup ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::SymbolLabel ).textFormat();
+  f.setSize( 12.0 );
+  f.setSizeUnit( Qgis::RenderUnit::Points );
+  f.setLineHeight( 1.1 );
+  f.setLineHeightUnit( Qgis::RenderUnit::Percentage );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).setTextFormat( f );
+}
+
+void QgsLegendSettings::updateDataDefinedProperties( QgsRenderContext &context )
+{
+  rstyle( Qgis::LegendComponent::Title ).updateDataDefinedProperties( context );
+  rstyle( Qgis::LegendComponent::Group ).updateDataDefinedProperties( context );
+  rstyle( Qgis::LegendComponent::Subgroup ).updateDataDefinedProperties( context );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).updateDataDefinedProperties( context );
+}
+
+QColor QgsLegendSettings::fontColor() const
+{
+  return style( Qgis::LegendComponent::SymbolLabel ).textFormat().color();
+}
+
+void QgsLegendSettings::setFontColor( const QColor &c )
+{
+  rstyle( Qgis::LegendComponent::Title ).textFormat().setColor( c );
+  rstyle( Qgis::LegendComponent::Group ).textFormat().setColor( c );
+  rstyle( Qgis::LegendComponent::Subgroup ).textFormat().setColor( c );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).textFormat().setColor( c );
+}
+
+QColor QgsLegendSettings::layerFontColor() const
+{
+  return style( Qgis::LegendComponent::Subgroup ).textFormat().color();
+}
+
+void QgsLegendSettings::setLayerFontColor( const QColor &fontColor )
+{
+  rstyle( Qgis::LegendComponent::Group ).textFormat().setColor( fontColor );
+  rstyle( Qgis::LegendComponent::Subgroup ).textFormat().setColor( fontColor );
+}
+
+void QgsLegendSettings::setLineSpacing( double s ) SIP_DEPRECATED
+{
+  // line spacing *was* a fixed amount (in mm) added between each line of text.
+  mLineSpacing = s;
+
+  QgsTextFormat f = rstyle( Qgis::LegendComponent::Title ).textFormat();
+  // assume font sizes in points, since that was what we always had from before this method was deprecated
+  f.setLineHeight( f.size() * 0.352778 + s );
+  f.setLineHeightUnit( Qgis::RenderUnit::Millimeters );
+  rstyle( Qgis::LegendComponent::Title ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::Group ).textFormat();
+  f.setLineHeight( f.size() * 0.352778 + s );
+  f.setLineHeightUnit( Qgis::RenderUnit::Millimeters );
+  rstyle( Qgis::LegendComponent::Group ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::Subgroup ).textFormat();
+  f.setLineHeight( f.size() * 0.352778 + s );
+  f.setLineHeightUnit( Qgis::RenderUnit::Millimeters );
+  rstyle( Qgis::LegendComponent::Subgroup ).setTextFormat( f );
+
+  f = rstyle( Qgis::LegendComponent::SymbolLabel ).textFormat();
+  f.setLineHeight( f.size() * 0.352778 + s );
+  f.setLineHeightUnit( Qgis::RenderUnit::Millimeters );
+  rstyle( Qgis::LegendComponent::SymbolLabel ).setTextFormat( f );
 }
 
 double QgsLegendSettings::mmPerMapUnit() const
@@ -131,8 +218,7 @@ void QgsLegendSettings::drawText( QPainter *p, const QRectF &rect, const QString
 {
   const QFont textFont = scaledFontPixelSize( font );
 
-  const QRectF scaledRect( rect.x() * FONT_WORKAROUND_SCALE, rect.y() * FONT_WORKAROUND_SCALE,
-                           rect.width() * FONT_WORKAROUND_SCALE, rect.height() * FONT_WORKAROUND_SCALE );
+  const QRectF scaledRect( rect.x() * FONT_WORKAROUND_SCALE, rect.y() * FONT_WORKAROUND_SCALE, rect.width() * FONT_WORKAROUND_SCALE, rect.height() * FONT_WORKAROUND_SCALE );
 
   const QgsScopedQPainterState painterState( p );
   p->setFont( textFont );
@@ -183,3 +269,12 @@ double QgsLegendSettings::fontDescentMillimeters( const QFont &font ) const
   return ( fontMetrics.descent() / FONT_WORKAROUND_SCALE );
 }
 
+Qgis::LegendJsonRenderFlags QgsLegendSettings::jsonRenderFlags() const
+{
+  return mJsonRenderFlags;
+}
+
+void QgsLegendSettings::setJsonRenderFlags( const Qgis::LegendJsonRenderFlags &jsonRenderFlags )
+{
+  mJsonRenderFlags = jsonRenderFlags;
+}

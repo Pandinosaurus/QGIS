@@ -14,17 +14,23 @@
  ***************************************************************************/
 
 #include "qgsbrowserproxymodel.h"
+
 #include "qgsbrowsermodel.h"
-#include "qgslayeritem.h"
 #include "qgsdatacollectionitem.h"
+#include "qgslayeritem.h"
 
 #include <QRegularExpression>
+#include <QString>
+
+#include "moc_qgsbrowserproxymodel.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsBrowserProxyModel::QgsBrowserProxyModel( QObject *parent )
   : QSortFilterProxyModel( parent )
 {
   setDynamicSortFilter( true );
-  setSortRole( QgsBrowserModel::SortRole );
+  setSortRole( static_cast< int >( QgsBrowserModel::CustomRole::Sort ) );
   setSortCaseSensitivity( Qt::CaseInsensitive );
   sort( 0 );
 }
@@ -88,8 +94,8 @@ void QgsBrowserProxyModel::updateFilter()
       const QStringList filterParts = mFilter.split( '|' );
       for ( const QString &f : filterParts )
       {
-        const QRegularExpression rx( QRegularExpression::wildcardToRegularExpression( QStringLiteral( "*%1*" ).arg( f.trimmed() ) ),
-                                     mCaseSensitivity == Qt::CaseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption );
+        const QRegularExpression
+          rx( QRegularExpression::wildcardToRegularExpression( u"*%1*"_s.arg( f.trimmed() ) ), mCaseSensitivity == Qt::CaseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption );
         mREList.append( rx );
       }
       break;
@@ -99,8 +105,8 @@ void QgsBrowserProxyModel::updateFilter()
       const QStringList filterParts = mFilter.split( '|' );
       for ( const QString &f : filterParts )
       {
-        const QRegularExpression rx( QRegularExpression::wildcardToRegularExpression( f.trimmed() ),
-                                     mCaseSensitivity == Qt::CaseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption );
+        const QRegularExpression
+          rx( QRegularExpression::wildcardToRegularExpression( f.trimmed() ), mCaseSensitivity == Qt::CaseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption );
         mREList.append( rx );
       }
       break;
@@ -128,20 +134,25 @@ bool QgsBrowserProxyModel::filterAcceptsString( const QString &value ) const
 
 bool QgsBrowserProxyModel::filterAcceptsRow( int sourceRow, const QModelIndex &sourceParent ) const
 {
-  if ( ( mFilter.isEmpty() && !mFilterByLayerType && mHiddenDataItemsKeys.empty() && mShownDataItemsKeys.empty() ) || !mModel )
+  if ( !mModel )
     return true;
 
   const QModelIndex sourceIndex = mModel->index( sourceRow, 0, sourceParent );
   if ( !filterAcceptsProviderKey( sourceIndex ) || !filterRootAcceptsProviderKey( sourceIndex ) )
     return false;
 
-  if ( ! mShowLayers )
+  QgsDataItem *item = mModel->dataItem( sourceIndex );
+  if ( !mShowLayers )
   {
-    QgsDataItem *item = mModel->dataItem( sourceIndex );
     if ( qobject_cast< QgsLayerItem * >( item ) )
     {
       return false;
     }
+  }
+  else if ( item && !mFilterByLayerType )
+  {
+    if ( item->filterFlags().testFlag( Qgis::BrowserItemFilterFlag::HideWhenNotFilteringByLayerType ) )
+      return false;
   }
 
   return filterAcceptsItem( sourceIndex ) || filterAcceptsAncestor( sourceIndex ) || filterAcceptsDescendant( sourceIndex );
@@ -157,12 +168,12 @@ void QgsBrowserProxyModel::setShowLayers( bool showLayers )
   mShowLayers = showLayers;
 }
 
-QgsMapLayerType QgsBrowserProxyModel::layerType() const
+Qgis::LayerType QgsBrowserProxyModel::layerType() const
 {
   return mLayerType;
 }
 
-void QgsBrowserProxyModel::setLayerType( QgsMapLayerType type )
+void QgsBrowserProxyModel::setLayerType( Qgis::LayerType type )
 {
   mLayerType = type;
   invalidateFilter();
@@ -212,9 +223,11 @@ bool QgsBrowserProxyModel::filterAcceptsItem( const QModelIndex &sourceIndex ) c
   if ( !mModel )
     return true;
 
+  QgsDataItem *item = mModel->dataItem( sourceIndex );
   if ( mFilterByLayerType )
   {
-    QgsDataItem *item = mModel->dataItem( sourceIndex );
+    if ( !item )
+      return false;
     if ( QgsLayerItem *layerItem = qobject_cast< QgsLayerItem * >( item ) )
     {
       if ( layerItem->mapLayerType() != mLayerType )
@@ -223,13 +236,20 @@ bool QgsBrowserProxyModel::filterAcceptsItem( const QModelIndex &sourceIndex ) c
     else if ( !qobject_cast< QgsDataCollectionItem * >( item ) )
       return false;
   }
+  else if ( item && item->filterFlags().testFlag( Qgis::BrowserItemFilterFlag::HideWhenNotFilteringByLayerType ) )
+  {
+    return false;
+  }
 
   if ( !mFilter.isEmpty() )
   {
     //accept item if either displayed text or comment role matches string
-    const QString comment = mModel->data( sourceIndex, QgsBrowserModel::CommentRole ).toString();
-    return ( filterAcceptsString( mModel->data( sourceIndex, Qt::DisplayRole ).toString() )
-             || ( !comment.isEmpty() && filterAcceptsString( comment ) ) );
+    const QString comment = mModel->data( sourceIndex, static_cast< int >( QgsBrowserModel::CustomRole::Comment ) ).toString();
+    return (
+      filterAcceptsString( mModel->data( sourceIndex, Qt::DisplayRole ).toString() )
+      || ( !comment.isEmpty() && filterAcceptsString( comment ) )
+      || mModel->data( sourceIndex, static_cast< int >( QgsBrowserModel::CustomRole::LayerMetadata ) ).value< QgsLayerMetadata >().matches( mREList )
+    );
   }
 
   return true;
@@ -240,7 +260,7 @@ bool QgsBrowserProxyModel::filterAcceptsProviderKey( const QModelIndex &sourceIn
   if ( !mModel )
     return true;
 
-  const QString providerKey = mModel->data( sourceIndex, QgsBrowserModel::ProviderKeyRole ).toString();
+  const QString providerKey = mModel->data( sourceIndex, static_cast< int >( QgsBrowserModel::CustomRole::ProviderKey ) ).toString();
   if ( providerKey.isEmpty() )
     return true;
 
@@ -280,9 +300,9 @@ bool QgsBrowserProxyModel::hasChildren( const QModelIndex &parent ) const
   if ( isFertile && parent.isValid() )
   {
     QgsDataItem *item = dataItem( parent );
-    if ( ! mShowLayers )
+    if ( item && !mShowLayers )
     {
-      return ! item->layerCollection();
+      return !item->layerCollection();
     }
     // Hide everything below layers if filter is set
     else if ( mFilterByLayerType && qobject_cast< QgsLayerItem * >( item ) )

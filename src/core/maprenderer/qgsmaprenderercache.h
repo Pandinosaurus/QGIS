@@ -17,18 +17,17 @@
 #define QGSMAPRENDERERCACHE_H
 
 #include "qgis_core.h"
-#include <QMap>
-#include <QImage>
-#include <QMutex>
-
-#include "qgsrectangle.h"
 #include "qgsmaplayer.h"
 #include "qgsmaptopixel.h"
+#include "qgsrectangle.h"
 
+#include <QImage>
+#include <QMap>
+#include <QMutex>
 
 /**
  * \ingroup core
- * \brief This class is responsible for keeping cache of rendered images resulting from
+ * \brief Responsible for keeping a cache of rendered images resulting from
  * a map rendering job.
  *
  * Once a job has a rendered image stored in the cache (using setCacheImage(...)),
@@ -42,13 +41,11 @@
  *
  * The class is thread-safe (multiple classes can access the same instance safely).
  *
- * \since QGIS 2.4
  */
 class CORE_EXPORT QgsMapRendererCache : public QObject
 {
     Q_OBJECT
   public:
-
     QgsMapRendererCache();
 
     /**
@@ -62,7 +59,7 @@ class CORE_EXPORT QgsMapRendererCache : public QObject
      * parameters have changed since last initialization.
      *
      * \returns flag whether the parameters are the same as last time
-     * \deprecated since QGIS 3.18 - will be removed in QGIS 4.0. Use the updateParameters() and clear()
+     * \deprecated QGIS 3.18. Will be removed in QGIS 5.0. Use the updateParameters() and clear().
      */
     Q_DECL_DEPRECATED bool init( const QgsRectangle &extent, double scale ) SIP_DEPRECATED;
 
@@ -102,18 +99,15 @@ class CORE_EXPORT QgsMapRendererCache : public QObject
      * \see cacheImage()
      * \since QGIS 3.18
      */
-    void setCacheImageWithParameters( const QString &cacheKey,
-                                      const QImage &image,
-                                      const QgsRectangle &extent,
-                                      const QgsMapToPixel &mapToPixel,
-                                      const QList< QgsMapLayer * > &dependentLayers = QList< QgsMapLayer * >() );
+    void setCacheImageWithParameters(
+      const QString &cacheKey, const QImage &image, const QgsRectangle &extent, const QgsMapToPixel &mapToPixel, const QList< QgsMapLayer * > &dependentLayers = QList< QgsMapLayer * >()
+    );
 
     /**
      * Returns TRUE if the cache contains an image with the specified \a cacheKey
      * that has the same extent and scale as the cache's global extent and scale
      *
      * \see cacheImage()
-     * \since QGIS 3.0
      */
     bool hasCacheImage( const QString &cacheKey ) const;
 
@@ -157,7 +151,6 @@ class CORE_EXPORT QgsMapRendererCache : public QObject
 
     /**
      * Returns a list of map layers on which an image in the cache depends.
-     * \since QGIS 3.0
      */
     QList< QgsMapLayer * > dependentLayers( const QString &cacheKey ) const;
 
@@ -179,13 +172,12 @@ class CORE_EXPORT QgsMapRendererCache : public QObject
     void layerRequestedRepaint();
 
   private:
-
     struct CacheParameters
     {
-      QImage cachedImage;
-      QgsWeakMapLayerPointerList dependentLayers;
-      QgsRectangle cachedExtent;
-      QgsMapToPixel cachedMtp;
+        QImage cachedImage;
+        QgsWeakMapLayerPointerList dependentLayers;
+        QgsRectangle cachedExtent;
+        QgsMapToPixel cachedMtp;
     };
 
     //! Invalidate cache contents (without locking)

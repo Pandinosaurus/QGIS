@@ -13,14 +13,39 @@
  *                                                                         *
  ***************************************************************************/
 #include "qgsmaplayerconfigwidget.h"
+
+#include "qgslayertreegroup.h"
 #include "qgspanelwidget.h"
+
+#include "moc_qgsmaplayerconfigwidget.cpp"
+
+//
+// QgsMapLayerConfigWidgetContext
+//
+
+void QgsMapLayerConfigWidgetContext::setLayerTreeGroup( QgsLayerTreeGroup *group )
+{
+  mLayerTreeGroup = group;
+}
+
+QgsLayerTreeGroup *QgsMapLayerConfigWidgetContext::layerTreeGroup() const
+{
+  return mLayerTreeGroup;
+}
+
+//
+//  QgsMapLayerConfigWidget
+//
 
 QgsMapLayerConfigWidget::QgsMapLayerConfigWidget( QgsMapLayer *layer, QgsMapCanvas *canvas, QWidget *parent )
   : QgsPanelWidget( parent )
   , mLayer( layer )
   , mMapCanvas( canvas )
-{
+{}
 
+QgsMapLayer *QgsMapLayerConfigWidget::layer()
+{
+  return mLayer;
 }
 
 void QgsMapLayerConfigWidget::setMapLayerConfigWidgetContext( const QgsMapLayerConfigWidgetContext &context )
@@ -29,5 +54,4 @@ void QgsMapLayerConfigWidget::setMapLayerConfigWidgetContext( const QgsMapLayerC
 }
 
 void QgsMapLayerConfigWidget::focusDefaultWidget()
-{
-}
+{}

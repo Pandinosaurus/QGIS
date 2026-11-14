@@ -6,7 +6,7 @@
 
 #include "mdal_dynamic_driver.hpp"
 #include "mdal_logger.hpp"
-#if not defined (WIN32)
+#ifndef WIN32
 #include <dlfcn.h>
 #endif
 #include <string.h>
@@ -286,11 +286,11 @@ bool MDAL::MeshDynamicDriver::populateDatasetGroups()
         return false;
       dataset->setTime( RelativeTimestamp( time, RelativeTimestamp::hours ) );
 
-      group->datasets.push_back( dataset );
+      group->datasets.emplace_back( std::move( dataset ) );
     }
 
     group->setStatistics( MDAL::calculateStatistics( group ) );
-    datasetGroups.push_back( group );
+    datasetGroups.emplace_back( std::move( group ) );
   }
   return true;
 }

@@ -10,7 +10,7 @@ if (WITH_GUI)
     qgsdelimitedtextsourceselect.cpp
   )
 
-  set(DTEXT_UIS qgsdelimitedtextsourceselectbase.ui)
+  set(DTEXT_UIS ${CMAKE_SOURCE_DIR}/src/ui/qgsdelimitedtextsourceselectbase.ui)
 endif()
 
 # static library
@@ -24,17 +24,10 @@ target_link_libraries(provider_delimitedtext_a
   qgis_core
 )
 
-# require c++17
-target_compile_features(provider_delimitedtext_a PRIVATE cxx_std_17)
-
 target_compile_definitions(provider_delimitedtext_a PRIVATE "-DQT_NO_FOREACH")
 
 if (WITH_GUI)
-  if (WITH_QT6)
-    QT6_WRAP_UI(DTEXT_UIS_H ${DTEXT_UIS})
-  else()
-    QT5_WRAP_UI(DTEXT_UIS_H ${DTEXT_UIS})
-  endif()
+  qt_wrap_ui(DTEXT_UIS_H ${DTEXT_UIS})
 
   add_library(provider_delimitedtext_gui_a STATIC ${DTEXT_GUI_SRCS} ${DTEXT_UIS_H})
 
@@ -46,9 +39,6 @@ if (WITH_GUI)
     qgis_gui
   )
 
-  # require c++17
-  target_compile_features(provider_delimitedtext_gui_a PRIVATE cxx_std_17)
-
   target_compile_definitions(provider_delimitedtext_gui_a PRIVATE "-DQT_NO_FOREACH")
 
   add_dependencies(provider_delimitedtext_gui_a ui)
@@ -58,20 +48,17 @@ if (FORCE_STATIC_LIBS)
   # for (external) mobile apps to be able to pick up provider for linking
   install (TARGETS provider_delimitedtext_a ARCHIVE DESTINATION ${QGIS_PLUGIN_DIR})
   if (WITH_GUI)
-    install (TARGETS provider_delimitedtext_a ARCHIVE DESTINATION ${QGIS_PLUGIN_DIR})
+    install (TARGETS provider_delimitedtext_gui_a ARCHIVE DESTINATION ${QGIS_PLUGIN_DIR})
   endif()
 else()
   add_library(provider_delimitedtext MODULE ${DTEXT_SRCS} ${DTEXT_GUI_SRCS})
-  
-  # require c++17
-  target_compile_features(provider_delimitedtext PRIVATE cxx_std_17)
   
   target_link_libraries(provider_delimitedtext
     qgis_core
   )
 
   if (WITH_GUI)
-    target_link_libraries (provider_delimitedtext
+    target_link_libraries(provider_delimitedtext
       qgis_gui
     )
     add_dependencies(provider_delimitedtext ui)

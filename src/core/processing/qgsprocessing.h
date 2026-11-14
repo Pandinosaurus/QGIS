@@ -18,9 +18,14 @@
 #ifndef QGSPROCESSING_H
 #define QGSPROCESSING_H
 
+#include "qgis.h"
 #include "qgis_core.h"
-#include "qgssettingsentry.h"
+#include "qgssettingsentryimpl.h"
+#include "qgssettingstree.h"
+
 #include <QString>
+
+using namespace Qt::StringLiterals;
 
 //
 // Output definitions
@@ -33,73 +38,80 @@
  * \brief Contains enumerations and other constants for use in processing algorithms
  * and parameters.
  *
- * \since QGIS 3.0
  */
 
 class CORE_EXPORT QgsProcessing
 {
+    Q_GADGET
 
   public:
-
-    //! Data source types enum
-    enum SourceType
-    {
-      TypeMapLayer = -2, //!< Any map layer type (raster, vector, mesh, point cloud, annotation or plugin layer)
-      TypeVectorAnyGeometry = -1, //!< Any vector layer with geometry
-      TypeVectorPoint = 0, //!< Vector point layers
-      TypeVectorLine = 1, //!< Vector line layers
-      TypeVectorPolygon = 2, //!< Vector polygon layers
-      TypeRaster = 3, //!< Raster layers
-      TypeFile = 4, //!< Files (i.e. non map layer sources, such as text files)
-      TypeVector = 5, //!< Tables (i.e. vector layers with or without geometry). When used for a sink this indicates the sink has no geometry.
-      TypeMesh = 6, //!< Mesh layers \since QGIS 3.6
-      TypePlugin = 7, //!< Plugin layers \since QGIS 3.22
-      TypePointCloud = 8, //!< Point cloud layers \since QGIS 3.22
-      TypeAnnotation = 9 //!< Annotation layers \since QGIS 3.22
-    };
-
     //! Available Python output types
-    enum PythonOutputType
+    enum class PythonOutputType SIP_MONKEYPATCH_SCOPEENUM
     {
       PythonQgsProcessingAlgorithmSubclass, //!< Full Python QgsProcessingAlgorithm subclass
     };
+    Q_ENUM( PythonOutputType )
+
+    /**
+     * Layer options flags
+     *
+     * \since QGIS 3.32
+     */
+    enum class LayerOptionsFlag : int SIP_ENUM_BASETYPE( IntFlag )
+    {
+      SkipIndexGeneration = 1 << 0, //!< Do not generate index when creating a layer. Makes sense only for point cloud layers
+    };
+    Q_ENUM( LayerOptionsFlag )
+    Q_DECLARE_FLAGS( LayerOptionsFlags, LayerOptionsFlag )
+    Q_FLAG( LayerOptionsFlags )
 
     /**
      * Converts a source \a type to a string representation.
      *
      * \since QGIS 3.6
      */
-    static QString sourceTypeToString( SourceType type )
+    static QString sourceTypeToString( Qgis::ProcessingSourceType type )
     {
       switch ( type )
       {
-        case QgsProcessing::TypeMapLayer:
-          return QStringLiteral( "TypeMapLayer" );
-        case QgsProcessing::TypeVectorAnyGeometry:
-          return QStringLiteral( "TypeVectorAnyGeometry" );
-        case QgsProcessing::TypeVectorPoint:
-          return QStringLiteral( "TypeVectorPoint" );
-        case QgsProcessing::TypeVectorLine:
-          return QStringLiteral( "TypeVectorLine" );
-        case QgsProcessing::TypeVectorPolygon:
-          return QStringLiteral( "TypeVectorPolygon" );
-        case QgsProcessing::TypeRaster:
-          return QStringLiteral( "TypeRaster" );
-        case QgsProcessing::TypeFile:
-          return QStringLiteral( "TypeFile" );
-        case QgsProcessing::TypeVector:
-          return QStringLiteral( "TypeVector" );
-        case QgsProcessing::TypeMesh:
-          return QStringLiteral( "TypeMesh" );
-        case QgsProcessing::TypePlugin:
-          return QStringLiteral( "TypePlugin" );
-        case QgsProcessing::TypePointCloud:
-          return QStringLiteral( "TypePointCloud" );
-        case QgsProcessing::TypeAnnotation:
-          return QStringLiteral( "TypeAnnotation" );
+        case Qgis::ProcessingSourceType::MapLayer:
+          return u"TypeMapLayer"_s;
+        case Qgis::ProcessingSourceType::VectorAnyGeometry:
+          return u"TypeVectorAnyGeometry"_s;
+        case Qgis::ProcessingSourceType::VectorPoint:
+          return u"TypeVectorPoint"_s;
+        case Qgis::ProcessingSourceType::VectorLine:
+          return u"TypeVectorLine"_s;
+        case Qgis::ProcessingSourceType::VectorPolygon:
+          return u"TypeVectorPolygon"_s;
+        case Qgis::ProcessingSourceType::Raster:
+          return u"TypeRaster"_s;
+        case Qgis::ProcessingSourceType::File:
+          return u"TypeFile"_s;
+        case Qgis::ProcessingSourceType::Vector:
+          return u"TypeVector"_s;
+        case Qgis::ProcessingSourceType::Mesh:
+          return u"TypeMesh"_s;
+        case Qgis::ProcessingSourceType::Plugin:
+          return u"TypePlugin"_s;
+        case Qgis::ProcessingSourceType::PointCloud:
+          return u"TypePointCloud"_s;
+        case Qgis::ProcessingSourceType::Annotation:
+          return u"TypeAnnotation"_s;
+        case Qgis::ProcessingSourceType::VectorTile:
+          return u"TypeVectorTile"_s;
+        case Qgis::ProcessingSourceType::TiledScene:
+          return u"TiledScene"_s;
       }
       return QString();
     }
+
+    /**
+     * Converts a documentation \a flag to a translated string.
+     *
+     * \since QGIS 3.40
+     */
+    static QString documentationFlagToString( Qgis::ProcessingAlgorithmDocumentationFlag flag );
 
     /**
      * Constant used to indicate that a Processing algorithm output should be a temporary layer/file.
@@ -108,15 +120,33 @@ class CORE_EXPORT QgsProcessing
      */
     static const QString TEMPORARY_OUTPUT;
 
+    /**
+     * Constant used for the model provider's ID.
+     *
+     * \since QGIS 4.4
+     */
+    static const QString MODEL_PROVIDER_ID;
+
+    /**
+     * Constant used for the project model provider's ID.
+     *
+     * \since QGIS 4.4
+     */
+    static const QString PROJECT_PROVIDER_ID;
+
 #ifndef SIP_RUN
+    static inline QgsSettingsTreeNode *sTreeConfiguration = QgsSettingsTree::sTreeQgis->createChildNode( u"configuration"_s );
+
     //! Settings entry prefer filename as layer name
-    static const inline QgsSettingsEntryBool settingsPreferFilenameAsLayerName = QgsSettingsEntryBool( QStringLiteral( "Processing/Configuration/PREFER_FILENAME_AS_LAYER_NAME" ), QgsSettings::NoSection, true, QObject::tr( "Prefer filename as layer name" ) );
+    static const QgsSettingsEntryBool *settingsPreferFilenameAsLayerName;
     //! Settings entry temp path
-    static const inline QgsSettingsEntryString settingsTempPath = QgsSettingsEntryString( QStringLiteral( "Processing/Configuration/TEMP_PATH2" ), QgsSettings::NoSection, QString() );
+    static const QgsSettingsEntryString *settingsTempPath;
     //! Settings entry default output vector layer ext
-    static const inline QgsSettingsEntryInteger settingsDefaultOutputVectorLayerExt = QgsSettingsEntryInteger( QStringLiteral( "Processing/Configuration/DefaultOutputVectorLayerExt" ), QgsSettings::NoSection, -1 );
-    //! Settings entry default output raster layer ext
-    static const inline QgsSettingsEntryInteger settingsDefaultOutputRasterLayerExt = QgsSettingsEntryInteger( QStringLiteral( "Processing/Configuration/DefaultOutputRasterLayerExt" ), QgsSettings::NoSection, -1 );
+    static const QgsSettingsEntryString *settingsDefaultOutputVectorLayerExt;
+    //! Settings entry default output raster layer format
+    static const QgsSettingsEntryString *settingsDefaultOutputRasterLayerFormat;
+    //! Settings entry default GUI parameter value (per algorithm id and parameter name)
+    static const QgsSettingsEntryVariant *settingsDefaultGuiParam;
 #endif
 };
 

@@ -14,19 +14,24 @@
  ***************************************************************************/
 
 #include "qgsmaptoolmeasurebearing.h"
-#include "qgsdisplayangle.h"
-#include "qgsdistancearea.h"
-#include "qgslogger.h"
-#include "qgsmapcanvas.h"
-#include "qgsmaptopixel.h"
-#include "qgsproject.h"
-#include "qgsrubberband.h"
-#include "qgssnappingutils.h"
-#include "qgssettings.h"
-#include "qgssnapindicator.h"
-#include "qgsmapmouseevent.h"
 
 #include <cmath>
+
+#include "qgsdisplayangle.h"
+#include "qgsdistancearea.h"
+#include "qgsmapcanvas.h"
+#include "qgsmapmouseevent.h"
+#include "qgsproject.h"
+#include "qgsrubberband.h"
+#include "qgssettingsentryimpl.h"
+#include "qgssettingsregistrygui.h"
+#include "qgssnapindicator.h"
+
+#include <QString>
+
+#include "moc_qgsmaptoolmeasurebearing.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsMapToolMeasureBearing::QgsMapToolMeasureBearing( QgsMapCanvas *canvas )
   : QgsMapTool( canvas )
@@ -34,8 +39,7 @@ QgsMapToolMeasureBearing::QgsMapToolMeasureBearing( QgsMapCanvas *canvas )
 {
   mToolName = tr( "Measure bearing" );
 
-  connect( canvas, &QgsMapCanvas::destinationCrsChanged,
-           this, &QgsMapToolMeasureBearing::updateSettings );
+  connect( canvas, &QgsMapCanvas::destinationCrsChanged, this, &QgsMapToolMeasureBearing::updateSettings );
 }
 
 QgsMapToolMeasureBearing::~QgsMapToolMeasureBearing()
@@ -56,14 +60,18 @@ void QgsMapToolMeasureBearing::canvasMoveEvent( QgsMapMouseEvent *e )
   mRubberBand->movePoint( point );
   if ( mAnglePoints.size() == 1 )
   {
-    if ( !mResultDisplay->isVisible() )
+    try
     {
-      mResultDisplay->move( e->pos() - QPoint( 100, 100 ) );
-      mResultDisplay->show();
-    }
+      const double bearing = mDa.bearing( mAnglePoints.at( 0 ), point );
+      mResultDisplay->setBearingInRadians( bearing );
 
-    const double bearing = mDa.bearing( mAnglePoints.at( 0 ), point );
-    mResultDisplay->setBearingInRadians( bearing );
+      if ( !mResultDisplay->isVisible() )
+      {
+        mResultDisplay->show();
+      }
+    }
+    catch ( QgsCsException & )
+    {}
   }
 }
 
@@ -89,7 +97,7 @@ void QgsMapToolMeasureBearing::canvasReleaseEvent( QgsMapMouseEvent *e )
       mResultDisplay = new QgsDisplayAngle( this );
       mResultDisplay->setWindowFlags( mResultDisplay->windowFlags() | Qt::Tool );
       mResultDisplay->setWindowTitle( tr( "Bearing" ) );
-      connect( mResultDisplay, &QDialog::rejected, this, &QgsMapToolMeasureBearing::stopMeasuring );
+      connect( mResultDisplay, &QDialog::finished, this, &QgsMapToolMeasureBearing::stopMeasuring );
     }
     configureDistanceArea();
     createRubberBand();
@@ -156,13 +164,10 @@ void QgsMapToolMeasureBearing::deactivate()
 void QgsMapToolMeasureBearing::createRubberBand()
 {
   delete mRubberBand;
-  mRubberBand = new QgsRubberBand( mCanvas, QgsWkbTypes::LineGeometry );
+  mRubberBand = new QgsRubberBand( mCanvas, Qgis::GeometryType::Line );
 
-  const QgsSettings settings;
-  const int myRed = settings.value( QStringLiteral( "qgis/default_measure_color_red" ), 180 ).toInt();
-  const int myGreen = settings.value( QStringLiteral( "qgis/default_measure_color_green" ), 180 ).toInt();
-  const int myBlue = settings.value( QStringLiteral( "qgis/default_measure_color_blue" ), 180 ).toInt();
-  mRubberBand->setColor( QColor( myRed, myGreen, myBlue, 100 ) );
+  const QColor measureColor = QgsSettingsRegistryGui::settingsDefaultMeasureColor->value();
+  mRubberBand->setColor( QColor( measureColor.red(), measureColor.green(), measureColor.blue(), 100 ) );
   mRubberBand->setWidth( 3 );
 }
 
@@ -176,8 +181,13 @@ void QgsMapToolMeasureBearing::updateSettings()
 
   configureDistanceArea();
 
-  const double bearing = mDa.bearing( mAnglePoints.at( 0 ), mAnglePoints.at( 1 ) );
-  mResultDisplay->setBearingInRadians( bearing );
+  try
+  {
+    const double bearing = mDa.bearing( mAnglePoints.at( 0 ), mAnglePoints.at( 1 ) );
+    mResultDisplay->setBearingInRadians( bearing );
+  }
+  catch ( QgsCsException & )
+  {}
 }
 
 void QgsMapToolMeasureBearing::configureDistanceArea()

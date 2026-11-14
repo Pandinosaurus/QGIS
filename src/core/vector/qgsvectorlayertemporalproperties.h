@@ -19,12 +19,11 @@
 #ifndef QGSVECTORLAYERTEMPORALPROPERTIES_H
 #define QGSVECTORLAYERTEMPORALPROPERTIES_H
 
-#include "qgis_core.h"
 #include "qgis.h"
+#include "qgis_core.h"
 #include "qgis_sip.h"
-#include "qgsrange.h"
 #include "qgsmaplayertemporalproperties.h"
-#include "qgsunittypes.h"
+#include "qgsrange.h"
 
 class QgsVectorLayer;
 class QgsFields;
@@ -33,14 +32,13 @@ class QgsFields;
  * \class QgsVectorLayerTemporalContext
  * \ingroup core
  * \brief Encapsulates the context in which a QgsVectorLayer's temporal capabilities
- * will be applied
+ * will be applied.
  *
  * \since QGIS 3.14
  */
 class CORE_EXPORT QgsVectorLayerTemporalContext
 {
   public:
-
     /**
      * Returns the associated layer.
      *
@@ -56,7 +54,6 @@ class CORE_EXPORT QgsVectorLayerTemporalContext
     void setLayer( QgsVectorLayer *layer );
 
   private:
-
     QgsVectorLayer *mLayer = nullptr;
 };
 
@@ -72,7 +69,6 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
     Q_OBJECT
 
   public:
-
     /**
      * Constructor for QgsVectorLayerTemporalProperties, with the specified \a parent object.
      *
@@ -259,14 +255,14 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
      *
      * \see setDurationUnits()
      */
-    QgsUnitTypes::TemporalUnit durationUnits() const;
+    Qgis::TemporalUnit durationUnits() const;
 
     /**
      * Sets the \a units of the event's duration.
      *
      * \see durationUnits()
      */
-    void setDurationUnits( QgsUnitTypes::TemporalUnit units );
+    void setDurationUnits( Qgis::TemporalUnit units );
 
     /**
      * Returns the fixed duration length, which contains the duration of the event.
@@ -328,7 +324,7 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
      * isVisibleInTemporalRange() when testing whether features from a layer set to the
      * ModeFixedTemporalRange should ALL be filtered out.
      */
-    QString createFilterString( QgsVectorLayerTemporalContext context, const QgsDateTimeRange &range ) const;
+    QString createFilterString( const QgsVectorLayerTemporalContext &context, const QgsDateTimeRange &range ) const;
 
     /**
      * Attempts to setup the temporal properties by scanning a set of \a fields
@@ -341,7 +337,6 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
     void setDefaultsFromDataProviderTemporalCapabilities( const QgsDataProviderTemporalCapabilities *capabilities ) override;
 
   private:
-
     //! Temporal layer mode.
     Qgis::VectorTemporalMode mMode = Qgis::VectorTemporalMode::FixedTemporalRange;
 
@@ -354,7 +349,7 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
     QString mStartFieldName;
     QString mEndFieldName;
     QString mDurationFieldName;
-    QgsUnitTypes::TemporalUnit mDurationUnit = QgsUnitTypes::TemporalMinutes;
+    Qgis::TemporalUnit mDurationUnit = Qgis::TemporalUnit::Minutes;
 
     double mFixedDuration = 0;
 
@@ -362,7 +357,6 @@ class CORE_EXPORT QgsVectorLayerTemporalProperties : public QgsMapLayerTemporalP
 
     QString mStartExpression;
     QString mEndExpression;
-
 };
 
 #endif // QGSVECTORLAYERTEMPORALPROPERTIES_H

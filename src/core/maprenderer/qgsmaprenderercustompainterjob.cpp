@@ -15,14 +15,21 @@
 
 #include "qgsmaprenderercustompainterjob.h"
 
+#include <memory>
+
+#include "qgselevationmap.h"
 #include "qgsfeedback.h"
 #include "qgslabelingengine.h"
 #include "qgslogger.h"
 #include "qgsmaplayerrenderer.h"
-#include "qgsmaplayerlistutils.h"
-#include "qgsvectorlayerlabeling.h"
+#include "qgspainting.h"
 
+#include <QString>
 #include <QtConcurrentRun>
+
+#include "moc_qgsmaprenderercustompainterjob.cpp"
+
+using namespace Qt::StringLiterals;
 
 //
 // QgsMapRendererAbstractCustomPainterJob
@@ -30,9 +37,7 @@
 
 QgsMapRendererAbstractCustomPainterJob::QgsMapRendererAbstractCustomPainterJob( const QgsMapSettings &settings )
   : QgsMapRendererJob( settings )
-{
-
-}
+{}
 
 void QgsMapRendererAbstractCustomPainterJob::preparePainter( QPainter *painter, const QColor &backgroundColor )
 {
@@ -41,17 +46,12 @@ void QgsMapRendererAbstractCustomPainterJob::preparePainter( QPainter *painter, 
 
   painter->setRenderHint( QPainter::Antialiasing, mSettings.testFlag( Qgis::MapSettingsFlag::Antialiasing ) );
   painter->setRenderHint( QPainter::SmoothPixmapTransform, mSettings.testFlag( Qgis::MapSettingsFlag::HighQualityImageTransforms ) );
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
   painter->setRenderHint( QPainter::LosslessImageRendering, mSettings.testFlag( Qgis::MapSettingsFlag::LosslessImageRendering ) );
-#endif
 
 #ifndef QT_NO_DEBUG
   QPaintDevice *paintDevice = painter->device();
-  const QString errMsg = QStringLiteral( "pre-set DPI not equal to painter's DPI (%1 vs %2)" )
-                         .arg( paintDevice->logicalDpiX() )
-                         .arg( mSettings.outputDpi() * mSettings.devicePixelRatio() );
-  Q_ASSERT_X( qgsDoubleNear( paintDevice->logicalDpiX(), mSettings.outputDpi() * mSettings.devicePixelRatio(), 1.0 ),
-              "Job::startRender()", errMsg.toLatin1().data() );
+  const QString errMsg = u"pre-set DPI not equal to painter's DPI (%1 vs %2)"_s.arg( paintDevice->logicalDpiX() ).arg( mSettings.outputDpi() );
+  Q_ASSERT_X( qgsDoubleNear( paintDevice->logicalDpiX(), mSettings.outputDpi(), 1.0 ), "Job::startRender()", errMsg.toLatin1().data() );
 #endif
 }
 
@@ -63,15 +63,13 @@ void QgsMapRendererAbstractCustomPainterJob::preparePainter( QPainter *painter, 
 QgsMapRendererCustomPainterJob::QgsMapRendererCustomPainterJob( const QgsMapSettings &settings, QPainter *painter )
   : QgsMapRendererAbstractCustomPainterJob( settings )
   , mPainter( painter )
-  , mActive( false )
-  , mRenderSynchronously( false )
 {
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER construct" ), 5 );
+  QgsDebugMsgLevel( u"QPAINTER construct"_s, 5 );
 }
 
 QgsMapRendererCustomPainterJob::~QgsMapRendererCustomPainterJob()
 {
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER destruct" ), 5 );
+  QgsDebugMsgLevel( u"QPAINTER destruct"_s, 5 );
   Q_ASSERT( !mFutureWatcher.isRunning() );
   //cancel();
 }
@@ -88,9 +86,9 @@ void QgsMapRendererCustomPainterJob::startPrivate()
 
   mErrors.clear();
 
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER run!" ), 5 );
+  QgsDebugMsgLevel( u"QPAINTER run!"_s, 5 );
 
-  QgsDebugMsgLevel( QStringLiteral( "Preparing list of layer jobs for rendering" ), 5 );
+  QgsDebugMsgLevel( u"Preparing list of layer jobs for rendering"_s, 5 );
   QElapsedTimer prepareTime;
   prepareTime.start();
 
@@ -100,8 +98,7 @@ void QgsMapRendererCustomPainterJob::startPrivate()
 
   if ( mSettings.testFlag( Qgis::MapSettingsFlag::DrawLabeling ) )
   {
-    mLabelingEngineV2.reset( new QgsDefaultLabelingEngine() );
-    mLabelingEngineV2->setMapSettings( mSettings );
+    mLabelingEngineV2 = std::make_unique<QgsDefaultLabelingEngine>( mSettings );
   }
 
   const bool canUseLabelCache = prepareLabelCache();
@@ -109,7 +106,7 @@ void QgsMapRendererCustomPainterJob::startPrivate()
   mLabelJob = prepareLabelingJob( mPainter, mLabelingEngineV2.get(), canUseLabelCache );
   mSecondPassLayerJobs = prepareSecondPassJobs( mLayerJobs, mLabelJob );
 
-  QgsDebugMsgLevel( QStringLiteral( "Rendering prepared in (seconds): %1" ).arg( prepareTime.elapsed() / 1000.0 ), 4 );
+  QgsDebugMsgLevel( u"Rendering prepared in (seconds): %1"_s.arg( prepareTime.elapsed() / 1000.0 ), 4 );
 
   if ( mRenderSynchronously )
   {
@@ -133,11 +130,11 @@ void QgsMapRendererCustomPainterJob::cancel()
 {
   if ( !isActive() )
   {
-    QgsDebugMsgLevel( QStringLiteral( "QPAINTER not running!" ), 4 );
+    QgsDebugMsgLevel( u"QPAINTER not running!"_s, 4 );
     return;
   }
 
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER canceling" ), 5 );
+  QgsDebugMsgLevel( u"QPAINTER canceling"_s, 5 );
   disconnect( &mFutureWatcher, &QFutureWatcher<void>::finished, this, &QgsMapRendererCustomPainterJob::futureFinished );
   cancelWithoutBlocking();
 
@@ -146,18 +143,18 @@ void QgsMapRendererCustomPainterJob::cancel()
 
   mFutureWatcher.waitForFinished();
 
-  QgsDebugMsgLevel( QStringLiteral( "QPAINER cancel waited %1 ms" ).arg( t.elapsed() / 1000.0 ), 5 );
+  QgsDebugMsgLevel( u"QPAINER cancel waited %1 ms"_s.arg( t.elapsed() / 1000.0 ), 5 );
 
   futureFinished();
 
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER canceled" ), 5 );
+  QgsDebugMsgLevel( u"QPAINTER canceled"_s, 5 );
 }
 
 void QgsMapRendererCustomPainterJob::cancelWithoutBlocking()
 {
   if ( !isActive() )
   {
-    QgsDebugMsg( QStringLiteral( "QPAINTER not running!" ) );
+    QgsDebugError( u"QPAINTER not running!"_s );
     return;
   }
 
@@ -182,7 +179,7 @@ void QgsMapRendererCustomPainterJob::waitForFinished()
 
   mFutureWatcher.waitForFinished();
 
-  QgsDebugMsgLevel( QStringLiteral( "waitForFinished: %1 ms" ).arg( t.elapsed() / 1000.0 ), 4 );
+  QgsDebugMsgLevel( u"waitForFinished: %1 ms"_s.arg( t.elapsed() / 1000.0 ), 4 );
 
   futureFinished();
 }
@@ -246,8 +243,8 @@ void QgsMapRendererCustomPainterJob::futureFinished()
 {
   mActive = false;
   if ( !mPrepared ) // can't access from other thread
-    mRenderingTime = mRenderingStart.elapsed();
-  QgsDebugMsgLevel( QStringLiteral( "QPAINTER futureFinished" ), 5 );
+    mRenderingTime = static_cast< int >( mRenderingStart.elapsed() );
+  QgsDebugMsgLevel( u"QPAINTER futureFinished"_s, 5 );
 
   if ( !mPrepared )
     logRenderingTime( mLayerJobs, {}, mLabelJob );
@@ -270,32 +267,40 @@ void QgsMapRendererCustomPainterJob::staticRender( QgsMapRendererCustomPainterJo
   catch ( QgsException &e )
   {
     Q_UNUSED( e )
-    QgsDebugMsg( "Caught unhandled QgsException: " + e.what() );
+    QgsDebugError( "Caught unhandled QgsException: " + e.what() );
   }
   catch ( std::exception &e )
   {
     Q_UNUSED( e )
-    QgsDebugMsg( "Caught unhandled std::exception: " + QString::fromLatin1( e.what() ) );
+    QgsDebugError( "Caught unhandled std::exception: " + QString::fromLatin1( e.what() ) );
   }
   catch ( ... )
   {
-    QgsDebugMsg( QStringLiteral( "Caught unhandled unknown exception" ) );
+    QgsDebugError( u"Caught unhandled unknown exception"_s );
   }
 }
 
 void QgsMapRendererCustomPainterJob::doRender()
 {
-  const bool hasSecondPass = ! mSecondPassLayerJobs.empty();
-  QgsDebugMsgLevel( QStringLiteral( "Starting to render layer stack." ), 5 );
+  const bool hasSecondPass = !mSecondPassLayerJobs.empty();
+  QgsDebugMsgLevel( u"Starting to render layer stack."_s, 5 );
   QElapsedTimer renderTime;
   renderTime.start();
+
+  const QgsElevationShadingRenderer mapShadingRenderer = mSettings.elevationShadingRenderer();
+  std::unique_ptr<QgsElevationMap> mainElevationMap;
+  if ( mapShadingRenderer.isActive() )
+    mainElevationMap = std::make_unique<QgsElevationMap>( mSettings.deviceOutputSize(), mSettings.devicePixelRatio() );
 
   for ( LayerRenderJob &job : mLayerJobs )
   {
     if ( job.context()->renderingStopped() )
       break;
 
-    if ( ! hasSecondPass && job.context()->useAdvancedEffects() )
+    emit layerRenderingStarted( job.layerId );
+
+    if ( !hasSecondPass
+         && ( job.context()->flags().testFlag( Qgis::RenderContextFlag::UseAdvancedEffects ) && job.context()->rasterizedRenderingPolicy() != Qgis::RasterizedRenderingPolicy::ForceVector ) )
     {
       // Set the QPainter composition mode so that this layer is rendered using
       // the desired blending mode
@@ -307,28 +312,59 @@ void QgsMapRendererCustomPainterJob::doRender()
       QElapsedTimer layerTime;
       layerTime.start();
 
-      if ( job.img )
+      if ( job.previewRenderImage && !job.previewRenderImageInitialized )
       {
-        job.img->fill( 0 );
+        job.previewRenderImage->fill( 0 );
+        job.previewRenderImageInitialized = true;
+      }
+
+      if ( job.destinationImage )
+      {
+        job.destinationImage->fill( 0 );
         job.imageInitialized = true;
       }
 
       job.completed = job.renderer->render();
 
-      job.renderingTime += layerTime.elapsed();
+      if ( job.picture )
+      {
+        job.renderer->renderContext()->painter()->end();
+      }
+
+      job.renderingTime += static_cast< int >( layerTime.elapsed() );
     }
 
-    if ( ! hasSecondPass && job.img )
+    if ( !hasSecondPass && job.destinationImage )
     {
       // If we flattened this layer for alternate blend modes, composite it now
       mPainter->setOpacity( job.opacity );
-      mPainter->drawImage( 0, 0, *job.img );
+      mPainter->drawImage( 0, 0, *job.destinationImage );
       mPainter->setOpacity( 1.0 );
     }
 
+    if ( mainElevationMap && job.context()->elevationMap() )
+    {
+      const QgsElevationMap &layerElevationMap = *job.context()->elevationMap();
+      if ( layerElevationMap.isValid() )
+        mainElevationMap->combine( layerElevationMap, mapShadingRenderer.combinedElevationMethod() );
+    }
+
+    emit layerRendered( job.layerId );
   }
 
-  QgsDebugMsgLevel( QStringLiteral( "Done rendering map layers" ), 5 );
+  emit renderingLayersFinished();
+  QgsDebugMsgLevel( u"Done rendering map layers"_s, 5 );
+
+  if ( mapShadingRenderer.isActive() && mainElevationMap )
+  {
+    QImage image( mainElevationMap->rawElevationImage().size(), QImage::Format_RGB32 );
+    image.setDevicePixelRatio( mSettings.devicePixelRatio() );
+    image.fill( Qt::white );
+    mapShadingRenderer.renderShading( *mainElevationMap.get(), image, QgsRenderContext::fromMapSettings( mSettings ) );
+    QgsScopedQPainterState painterState( mPainter );
+    mPainter->setCompositionMode( QPainter::CompositionMode_Multiply );
+    mPainter->drawImage( 0, 0, image );
+  }
 
   if ( mSettings.testFlag( Qgis::MapSettingsFlag::DrawLabeling ) && !mLabelJob.context.renderingStopped() )
   {
@@ -341,7 +377,15 @@ void QgsMapRendererCustomPainterJob::doRender()
       {
         QPainter painter;
         mLabelJob.img->fill( 0 );
-        painter.begin( mLabelJob.img );
+        painter.begin( mLabelJob.img.get() );
+        mLabelJob.context.setPainter( &painter );
+        drawLabeling( mLabelJob.context, mLabelingEngineV2.get(), &painter );
+        painter.end();
+      }
+      else if ( mLabelJob.picture )
+      {
+        QPainter painter;
+        painter.begin( mLabelJob.picture.get() );
         mLabelJob.context.setPainter( &painter );
         drawLabeling( mLabelJob.context, mLabelingEngineV2.get(), &painter );
         painter.end();
@@ -352,12 +396,12 @@ void QgsMapRendererCustomPainterJob::doRender()
       }
 
       mLabelJob.complete = true;
-      mLabelJob.renderingTime = labelTime.elapsed();
-      mLabelJob.participatingLayers = _qgis_listRawToQPointer( mLabelingEngineV2->participatingLayers() );
+      mLabelJob.renderingTime = static_cast< int >( labelTime.elapsed() );
+      mLabelJob.participatingLayers = participatingLabelLayers( mLabelingEngineV2.get() );
     }
   }
 
-  if ( ! hasSecondPass )
+  if ( !hasSecondPass )
   {
     if ( mLabelJob.img && mLabelJob.complete )
     {
@@ -368,6 +412,8 @@ void QgsMapRendererCustomPainterJob::doRender()
   }
   else
   {
+    initSecondPassJobs( mSecondPassLayerJobs, mLabelJob );
+
     for ( LayerRenderJob &job : mSecondPassLayerJobs )
     {
       if ( job.context()->renderingStopped() )
@@ -378,28 +424,59 @@ void QgsMapRendererCustomPainterJob::doRender()
         QElapsedTimer layerTime;
         layerTime.start();
 
-        if ( job.img )
+        if ( job.previewRenderImage && !job.previewRenderImageInitialized )
         {
-          job.img->fill( 0 );
+          job.previewRenderImage->fill( 0 );
+          job.previewRenderImageInitialized = true;
+        }
+
+        if ( job.destinationImage )
+        {
+          job.destinationImage->fill( 0 );
           job.imageInitialized = true;
         }
 
         job.completed = job.renderer->render();
 
-        job.renderingTime += layerTime.elapsed();
+        if ( job.picture )
+        {
+          job.renderer->renderContext()->painter()->end();
+        }
+
+        job.renderingTime += static_cast< int >( layerTime.elapsed() );
       }
     }
 
     composeSecondPass( mSecondPassLayerJobs, mLabelJob );
 
-    const QImage finalImage = composeImage( mSettings, mLayerJobs, mLabelJob );
+    for ( LayerRenderJob &job : mLayerJobs )
+    {
+      // if there is vector rendering we use it, else we use the raster rendering
+      if ( job.picture )
+      {
+        QgsPainting::drawPicture( mPainter, QPointF( 0, 0 ), *job.picture );
+      }
+      else
+      {
+        mPainter->setOpacity( job.opacity );
+        mPainter->setCompositionMode( job.blendMode );
+        mPainter->drawImage( 0, 0, *job.destinationImage );
+        mPainter->setCompositionMode( QPainter::CompositionMode_SourceOver );
+        mPainter->setOpacity( 1.0 );
+      }
+    }
 
-    mPainter->setCompositionMode( QPainter::CompositionMode_SourceOver );
-    mPainter->setOpacity( 1.0 );
-    mPainter->drawImage( 0, 0, finalImage );
+    if ( mLabelJob.picture )
+    {
+      QgsPainting::drawPicture( mPainter, QPointF( 0, 0 ), *mLabelJob.picture );
+    }
+    else if ( mLabelJob.img )
+    {
+      mPainter->setCompositionMode( QPainter::CompositionMode_SourceOver );
+      mPainter->setOpacity( 1.0 );
+      mPainter->drawImage( 0, 0, *mLabelJob.img );
+    }
   }
 
-  QgsDebugMsgLevel( QStringLiteral( "Rendering completed in (seconds): %1" ).arg( renderTime.elapsed() / 1000.0 ), 2 );
+  QgsDebugMsgLevel( u"Rendering completed in (seconds): %1"_s.arg( renderTime.elapsed() / 1000.0 ), 2 );
 }
-
-

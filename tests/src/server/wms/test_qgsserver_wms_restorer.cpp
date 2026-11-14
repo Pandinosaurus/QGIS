@@ -13,11 +13,12 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <memory>
+
+#include "qgsserverinterfaceimpl.h"
 #include "qgstest.h"
 #include "qgsvectorlayer.h"
-
 #include "qgswmsrestorer.h"
-#include "qgsserverinterfaceimpl.h"
 
 /**
  * \ingroup UnitTests
@@ -57,9 +58,9 @@ void TestQgsServerWmsRestorer::restorer_layer()
   const QgsWms::QgsWmsParameters parameters( query );
 
   // init context
-  QgsCapabilitiesCache cache;
   QgsServiceRegistry registry;
   QgsServerSettings settings;
+  QgsCapabilitiesCache cache( settings.capabilitiesCacheSize() );
   QgsServerInterfaceImpl interface( &cache, &registry, &settings );
 
   QgsWms::QgsWmsRenderContext context( &project, &interface );
@@ -82,7 +83,7 @@ void TestQgsServerWmsRestorer::restorer_layer()
   {
     // destructor is called once out of scope
     std::unique_ptr<QgsWms::QgsWmsRestorer> restorer;
-    restorer.reset( new QgsWms::QgsWmsRestorer( context ) );
+    restorer = std::make_unique<QgsWms::QgsWmsRestorer>( context );
 
     const QString new_name = "new_name";
     vl->setName( new_name );

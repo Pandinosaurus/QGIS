@@ -14,20 +14,21 @@
  *                                                                         *
  ***************************************************************************/
 #include "qgsogrdbtablemodel.h"
+
+#include "moc_qgsogrdbtablemodel.cpp"
+
 ///@cond PRIVATE
 
 #include "qgsapplication.h"
+#include "qgslayeritem.h"
 
 #include <QIcon>
 
 QgsOgrDbTableModel::QgsOgrDbTableModel( QObject *parent )
   : QgsAbstractDbTableModel( parent )
 {
-  mColumns << tr( "Table" )
-           << tr( "Type" )
-           << tr( "Geometry column" )
-           << tr( "SQL" );
-  setHorizontalHeaderLabels( columns() );
+  mColumns << tr( "Table" ) << tr( "Type" ) << tr( "Geometry column" ) << tr( "SQL" );
+  setHorizontalHeaderLabels( mColumns );
 }
 
 QStringList QgsOgrDbTableModel::columns() const
@@ -42,15 +43,23 @@ int QgsOgrDbTableModel::defaultSearchColumn() const
 
 bool QgsOgrDbTableModel::searchableColumn( int column ) const
 {
-  Q_UNUSED( column )
-  return true;
+  Columns col = static_cast<Columns>( column );
+  switch ( col )
+  {
+    case QgsOgrDbTableModel::DbtmTable:
+    case QgsOgrDbTableModel::DbtmType:
+    case QgsOgrDbTableModel::DbtmGeomCol:
+    case QgsOgrDbTableModel::DbtmSql:
+      return true;
+  }
+  BUILTIN_UNREACHABLE
 }
 
-void QgsOgrDbTableModel::addTableEntry( const Qgis::BrowserLayerType &layerType, const QString &tableName, const QString &uri, const QString &geometryColName, const QString &geometryType, const QString &sql )
+void QgsOgrDbTableModel::addTableEntry( Qgis::BrowserLayerType layerType, const QString &tableName, const QString &uri, const QString &geometryColName, const QString &geometryType, const QString &sql )
 {
   //is there already a root item ?
   QStandardItem *dbItem = nullptr;
-  const QList < QStandardItem * >dbItems = findItems( mPath, Qt::MatchExactly, 0 );
+  const QList<QStandardItem *> dbItems = findItems( mPath, Qt::MatchExactly, 0 );
 
   //there is already an item
   if ( !dbItems.isEmpty() )
@@ -64,7 +73,7 @@ void QgsOgrDbTableModel::addTableEntry( const Qgis::BrowserLayerType &layerType,
     invisibleRootItem()->setChild( invisibleRootItem()->rowCount(), dbItem );
   }
 
-  QList < QStandardItem * >childItemList;
+  QList<QStandardItem *> childItemList;
   QStandardItem *typeItem = new QStandardItem( QgsApplication::getThemeIcon( QgsLayerItem::iconName( layerType ) ), geometryType );
   typeItem->setFlags( Qt::ItemIsEnabled | Qt::ItemIsSelectable );
   QStandardItem *tableItem = new QStandardItem( tableName );

@@ -18,30 +18,27 @@
 #define QGSCADUTILS_H
 
 #include "qgis_core.h"
-
 #include "qgspointlocator.h"
+
+#include <QQueue>
 
 class QgsSnappingUtils;
 
 /**
  * \ingroup core
- * \brief The QgsCadUtils class provides routines for CAD editing.
+ * \brief Provides routines for CAD editing.
  *
- * \since QGIS 3.0
  */
 class CORE_EXPORT QgsCadUtils
 {
   public:
-
     /**
-     * \brief Structure with details of one constraint
+     * \brief Structure with details of one constraint.
      * \ingroup core
-     * \since QGIS 3.0
      */
     class AlignMapPointConstraint
     {
       public:
-
         /**
          * Constructor for AlignMapPointConstraint.
          */
@@ -60,14 +57,12 @@ class CORE_EXPORT QgsCadUtils
     };
 
     /**
-     * \brief Structure returned from alignMapPoint() method
+     * \brief Structure returned from alignMapPoint() method.
      * \ingroup core
-     * \since QGIS 3.0
      */
     class AlignMapPointOutput
     {
       public:
-
         //! Whether the combination of constraints is actually valid
         bool valid;
 
@@ -82,18 +77,21 @@ class CORE_EXPORT QgsCadUtils
 
         /**
          * Snapped segment - only valid if actually used for something
-         * \deprecated will be removed in QGIS 4.0 - use snapMatch instead
+         * \deprecated QGIS 3.40. Will be removed in QGIS 5.0 - use snapMatch() instead.
          */
         QgsPointLocator::Match edgeMatch;
 
         //! Angle (in degrees) to which we have soft-locked ourselves (if not set it is -1)
         double softLockCommonAngle;
+
+        Qgis::LineExtensionSide softLockLineExtension;
+        double softLockX;
+        double softLockY;
     };
 
     /**
      * \ingroup core
      * \brief Defines constraints for the QgsCadUtils::alignMapPoint() method.
-     * \since QGIS 3.0
      */
     class AlignMapPointContext
     {
@@ -101,7 +99,7 @@ class CORE_EXPORT QgsCadUtils
         //! Snapping utils that will be used to snap point to map. Must not be NULLPTR.
         QgsSnappingUtils *snappingUtils = nullptr;
         //! Map units/pixel ratio from map canvas.
-        double mapUnitsPerPixel;
+        double mapUnitsPerPixel = 1;
 
         //! Constraint for X coordinate
         QgsCadUtils::AlignMapPointConstraint xConstraint;
@@ -126,6 +124,15 @@ class CORE_EXPORT QgsCadUtils
         //! Constraint for soft lock to a common angle
         QgsCadUtils::AlignMapPointConstraint commonAngleConstraint;
 
+        QgsCadUtils::AlignMapPointConstraint lineExtensionConstraint;
+        QgsCadUtils::AlignMapPointConstraint xyVertexConstraint;
+
+        /**
+         * Flag to set snapping to features priority over common angle.
+         * \since QGIS 3.32
+         */
+        bool snappingToFeaturesOverridesCommonAngle = false;
+
         /**
          * Dumps the context's properties, for debugging.
          * \note Not available in Python bindings.
@@ -141,7 +148,7 @@ class CORE_EXPORT QgsCadUtils
          * \see setCadPoints()
          * \since QGIS 3.22
          */
-        QList< QgsPoint > cadPoints() const { return mCadPointList; } ;
+        QList< QgsPoint > cadPoints() const { return mCadPointList; };
 
         /**
          * Sets the list of recent CAD \a points (in map coordinates).
@@ -149,7 +156,7 @@ class CORE_EXPORT QgsCadUtils
          * \see cadPoints()
          * \since QGIS 3.22
          */
-        void setCadPoints( const QList< QgsPoint> &points ) { mCadPointList = points; };
+        void setCadPoints( const QList< QgsPoint > &points ) { mCadPointList = points; };
 
         /**
          * Sets the recent CAD point at the specified \a index to \a point (in map coordinates).
@@ -167,24 +174,57 @@ class CORE_EXPORT QgsCadUtils
          */
         QgsPoint cadPoint( int index ) const { return mCadPointList[index]; };
 
+        /**
+         * Sets the queue of locked vertices.
+         *
+         * Point locator matches are stored instead of vertices to keep more context.
+         *
+         * \see lockedSnapVertices()
+         * \since QGIS 3.26
+         */
+        void setLockedSnapVertices( const QQueue< QgsPointLocator::Match > &lockedSnapVertices ) { mLockedSnapVertices = lockedSnapVertices; }
+        SIP_SKIP;
+
+        /**
+         * Returns the queue of point locator matches that contain the locked vertices.
+         *
+         * \see setLockedSnapVertices()
+         * \since QGIS 3.26
+         */
+        QQueue< QgsPointLocator::Match > lockedSnapVertices() const { return mLockedSnapVertices; }
+        SIP_SKIP;
 
 #ifdef SIP_RUN
         SIP_PROPERTY( name = cadPointList, get = _cadPointList, set = _setCadPointList )
 #endif
         ///@cond PRIVATE
-        void _setCadPointList( const QList< QgsPointXY > &list ) { mCadPointList.clear(); for ( const auto &pointxy : list ) { mCadPointList.append( QgsPoint( pointxy ) );} }
-        QList< QgsPointXY > _cadPointList() const { QList< QgsPointXY> list; for ( const auto &point : mCadPointList ) { list.append( QgsPointXY( point.x(), point.y() ) ); }; return list; }
+        void _setCadPointList( const QList< QgsPointXY > &list )
+        {
+          mCadPointList.clear();
+          for ( const auto &pointxy : list )
+          {
+            mCadPointList.append( QgsPoint( pointxy ) );
+          }
+        }
+        QList< QgsPointXY > _cadPointList() const
+        {
+          QList< QgsPointXY> list;
+          for ( const auto &point : mCadPointList )
+          {
+            list.append( QgsPointXY( point.x(), point.y() ) );
+          };
+          return list;
+        }
         ///@endcond PRIVATE
 
       private:
-
         /**
          * List of recent CAD points in map coordinates. These are used to turn relative constraints to absolute.
          * First point is the most recent point. Currently using only "previous" point (index 1) and "penultimate"
          * point (index 2) for alignment purposes.
          */
         QList<QgsPoint> mCadPointList;
-
+        QQueue< QgsPointLocator::Match > mLockedSnapVertices;
     };
 
     /**
@@ -193,7 +233,6 @@ class CORE_EXPORT QgsCadUtils
      * some extra information.
      */
     static QgsCadUtils::AlignMapPointOutput alignMapPoint( const QgsPointXY &originalMapPoint, const QgsCadUtils::AlignMapPointContext &ctx );
-
 };
 
 #endif // QGSCADUTILS_H

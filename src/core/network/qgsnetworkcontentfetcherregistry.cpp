@@ -19,9 +19,17 @@
 #include "qgsnetworkcontentfetcherregistry.h"
 
 #include "qgsapplication.h"
-#include <QUrl>
-#include <QFileInfo>
+
 #include <QDir>
+#include <QFileInfo>
+#include <QMimeDatabase>
+#include <QMimeType>
+#include <QString>
+#include <QUrl>
+
+#include "moc_qgsnetworkcontentfetcherregistry.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsNetworkContentFetcherRegistry::~QgsNetworkContentFetcherRegistry()
 {
@@ -33,15 +41,14 @@ QgsNetworkContentFetcherRegistry::~QgsNetworkContentFetcherRegistry()
   mFileRegistry.clear();
 }
 
-QgsFetchedContent *QgsNetworkContentFetcherRegistry::fetch( const QString &url, const Qgis::ActionStart fetchingMode, const QString &authConfig )
+QgsFetchedContent *QgsNetworkContentFetcherRegistry::fetch( const QString &url, const Qgis::ActionStart fetchingMode, const QString &authConfig, const QgsHttpHeaders &headers )
 {
-
   if ( mFileRegistry.contains( url ) )
   {
     return mFileRegistry.value( url );
   }
 
-  QgsFetchedContent *content = new QgsFetchedContent( url, nullptr, QgsFetchedContent::NotStarted, authConfig );
+  QgsFetchedContent *content = new QgsFetchedContent( url, nullptr, QgsFetchedContent::NotStarted, authConfig, headers );
 
   mFileRegistry.insert( url, content );
 
@@ -89,9 +96,10 @@ QString QgsNetworkContentFetcherRegistry::localPath( const QString &filePathOrUr
 
   if ( !QUrl::fromUserInput( filePathOrUrl ).isLocalFile() )
   {
-    if ( mFileRegistry.contains( path ) )
+    auto it = mFileRegistry.constFind( path );
+    if ( it != mFileRegistry.constEnd() )
     {
-      const QgsFetchedContent *content = mFileRegistry.value( path );
+      const QgsFetchedContent *content = it.value();
       if ( content->status() == QgsFetchedContent::Finished && !content->filePath().isEmpty() )
       {
         path = content->filePath();
@@ -111,11 +119,8 @@ QString QgsNetworkContentFetcherRegistry::localPath( const QString &filePathOrUr
 }
 
 
-
-
 void QgsFetchedContent::download( bool redownload )
 {
-
   if ( redownload && status() == QgsFetchedContent::Downloading )
   {
     {
@@ -124,19 +129,16 @@ void QgsFetchedContent::download( bool redownload )
     }
     cancel();
   }
-  if ( redownload ||
-       status() == QgsFetchedContent::NotStarted ||
-       status() == QgsFetchedContent::Failed )
+  if ( redownload || status() == QgsFetchedContent::NotStarted || status() == QgsFetchedContent::Failed )
   {
-    mFetchingTask = new QgsNetworkContentFetcherTask( mUrl, mAuthConfig );
+    mFetchingTask = new QgsNetworkContentFetcherTask( mUrl, mAuthConfig, QgsTask::CanCancel, QString(), mHeaders );
     // use taskCompleted which is main thread rather than fetched signal in worker thread
     connect( mFetchingTask, &QgsNetworkContentFetcherTask::taskCompleted, this, &QgsFetchedContent::taskCompleted );
     connect( mFetchingTask, &QgsNetworkContentFetcherTask::taskTerminated, this, &QgsFetchedContent::taskCompleted );
     connect( mFetchingTask, &QgsNetworkContentFetcherTask::errorOccurred, this, &QgsFetchedContent::errorOccurred );
-    QgsApplication::instance()->taskManager()->addTask( mFetchingTask );
+    QgsApplication::taskManager()->addTask( mFetchingTask );
     mStatus = QgsFetchedContent::Downloading;
   }
-
 }
 
 void QgsFetchedContent::cancel()
@@ -144,11 +146,7 @@ void QgsFetchedContent::cancel()
   if ( mFetchingTask && mFetchingTask->canCancel() )
   {
     mFetchingTask->cancel();
-  }
-  if ( mFile )
-  {
-    mFile->deleteLater();
-    mFilePath = QString();
+    mStatus = ContentStatus::NotStarted;
   }
 }
 
@@ -167,18 +165,35 @@ void QgsFetchedContent::taskCompleted()
     QNetworkReply *reply = mFetchingTask->reply();
     if ( reply->error() == QNetworkReply::NoError )
     {
-      // keep extension, it can be useful when guessing file content
+      // keep or guess extension, it can be useful when guessing file content
       // (when loading this file in a Qt WebView for instance)
-      const QString extension = QFileInfo( reply->request().url().fileName() ).completeSuffix();
 
-      QTemporaryFile *tf = new QTemporaryFile( extension.isEmpty() ? QString( "XXXXXX" ) :
-          QString( "%1/XXXXXX.%2" ).arg( QDir::tempPath(), extension ) );
-      mFile = tf;
-      tf->open();
+      // extension from file name
+      QString extension = QFileInfo( reply->request().url().fileName() ).completeSuffix();
+
+      // extension from contentType header if not found from file name
+      const QString contentType = reply->header( QNetworkRequest::ContentTypeHeader ).toString();
+      if ( extension.isEmpty() && !contentType.isEmpty() )
+      {
+        const QList<QMimeType> mimeTypes = QMimeDatabase().allMimeTypes();
+        auto it = std::find_if( mimeTypes.constBegin(), mimeTypes.constEnd(), [contentType]( QMimeType mimeType ) { return mimeType.name() == contentType; } );
+        if ( it != mimeTypes.constEnd() )
+        {
+          extension = ( *it ).preferredSuffix();
+        }
+      }
+
+      mFile = std::make_unique<QTemporaryFile>( extension.isEmpty() ? QString( "XXXXXX" ) : QString( "%1/XXXXXX.%2" ).arg( QDir::tempPath(), extension ) );
+      if ( !mFile->open() )
+      {
+        QgsDebugError( u"Can't open temporary file %1"_s.arg( mFile->fileName() ) );
+        mStatus = QgsFetchedContent::Failed;
+        return;
+      }
       mFile->write( reply->readAll() );
       // Qt docs notes that on some system if fileName is not called before close, file might get deleted
-      mFilePath = tf->fileName();
-      tf->close();
+      mFilePath = mFile->fileName();
+      mFile->close();
       mStatus = QgsFetchedContent::Finished;
     }
     else

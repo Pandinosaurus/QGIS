@@ -16,14 +16,15 @@
  ***************************************************************************/
 
 #include "qgsexpressioncalculatorlocatorfilter.h"
+
+#include "qgisapp.h"
 #include "qgsexpressioncontext.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsproject.h"
-#include "qgisapp.h"
 
 #include <QClipboard>
 
-
+#include "moc_qgsexpressioncalculatorlocatorfilter.cpp"
 
 QgsExpressionCalculatorLocatorFilter::QgsExpressionCalculatorLocatorFilter( QObject *parent )
   : QgsLocatorFilter( parent )
@@ -39,9 +40,7 @@ QgsExpressionCalculatorLocatorFilter *QgsExpressionCalculatorLocatorFilter::clon
 void QgsExpressionCalculatorLocatorFilter::fetchResults( const QString &string, const QgsLocatorContext &, QgsFeedback * )
 {
   QgsExpressionContext context;
-  context << QgsExpressionContextUtils::globalScope()
-          << QgsExpressionContextUtils::projectScope( QgsProject::instance() )
-          << QgsExpressionContextUtils::layerScope( QgisApp::instance()->activeLayer() );
+  context << QgsExpressionContextUtils::globalScope() << QgsExpressionContextUtils::projectScope( QgsProject::instance() ) << QgsExpressionContextUtils::layerScope( QgisApp::instance()->activeLayer() );
 
   QString error;
   if ( QgsExpression::checkExpression( string, &context, error ) )
@@ -53,7 +52,7 @@ void QgsExpressionCalculatorLocatorFilter::fetchResults( const QString &string, 
       QgsLocatorResult result;
       result.filter = this;
       result.displayString = tr( "Copy “%1” to clipboard" ).arg( resultString );
-      result.userData = resultString;
+      result.setUserData( resultString );
       result.score = 1;
       emit resultFetched( result );
     }
@@ -62,5 +61,5 @@ void QgsExpressionCalculatorLocatorFilter::fetchResults( const QString &string, 
 
 void QgsExpressionCalculatorLocatorFilter::triggerResult( const QgsLocatorResult &result )
 {
-  QApplication::clipboard()->setText( result.userData.toString() );
+  QApplication::clipboard()->setText( result.userData().toString() );
 }

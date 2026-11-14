@@ -16,9 +16,9 @@
 #ifndef QGSEXTERNALSTORAGE_H
 #define QGSEXTERNALSTORAGE_H
 
+#include "qgis.h"
 #include "qgis_core.h"
 #include "qgis_sip.h"
-#include "qgis.h"
 
 #include <QObject>
 #include <QString>
@@ -36,10 +36,6 @@ class QgsExternalStorageStoredContent;
 class CORE_EXPORT QgsExternalStorage
 {
   public:
-
-    /**
-     * Destructor
-     */
     virtual ~QgsExternalStorage() = default;
 
     /**
@@ -53,6 +49,7 @@ class CORE_EXPORT QgsExternalStorage
      */
     virtual QString displayName() const = 0;
 
+    // clang-format off
     /**
      * Stores file \a filePath to the \a url for this project external storage.
      * Storing process is run in background.
@@ -70,6 +67,7 @@ class CORE_EXPORT QgsExternalStorage
      * Caller takes ownership of the returned symbol.
      */
     QgsExternalStorageStoredContent *store( const QString &filePath, const QString &url, const QString &authCfg = QString(), Qgis::ActionStart storingMode = Qgis::ActionStart::Deferred ) const SIP_FACTORY;
+    // clang-format on
 
     /**
      * Fetches file from \a url for this project external storage.
@@ -88,7 +86,6 @@ class CORE_EXPORT QgsExternalStorage
     QgsExternalStorageFetchedContent *fetch( const QString &url, const QString &authCfg = QString(), Qgis::ActionStart fetchingMode = Qgis::ActionStart::Deferred ) const SIP_FACTORY;
 
   protected:
-
     /**
      * Stores file \a filePath to the \a url using \a authCfg authentication for this project external storage.
      * \see QgsExternalStorage::store()
@@ -104,7 +101,7 @@ class CORE_EXPORT QgsExternalStorage
 
 /**
  * \ingroup core
- * \brief Base class for QgsExternalStorage stored and fetched content
+ * \brief Base class for QgsExternalStorage stored and fetched content.
  *
  * \since QGIS 3.22
  */
@@ -113,7 +110,6 @@ class CORE_EXPORT QgsExternalStorageContent : public QObject
     Q_OBJECT
 
   public:
-
     /**
      * Returns content status
      */
@@ -150,20 +146,27 @@ class CORE_EXPORT QgsExternalStorageContent : public QObject
     void canceled();
 
   protected:
-
     /**
      * Update content according to given \a errorMsg error message
      * Inherited classes should call this method whenever they meet an error.
      */
     void reportError( const QString &errorMsg );
 
-    Qgis::ContentStatus mStatus = Qgis::ContentStatus::NotStarted;
+    /**
+     * Sets the external storage \a status
+     */
+    void setStatus( Qgis::ContentStatus status );
+
     QString mErrorString;
+
+
+  private:
+    Qgis::ContentStatus mStatus = Qgis::ContentStatus::NotStarted;
 };
 
 /**
  * \ingroup core
- * \brief Class for QgsExternalStorage fetched content
+ * \brief Abstract base class for QgsExternalStorage fetched content.
  *
  * \since QGIS 3.22
  */
@@ -172,7 +175,6 @@ class CORE_EXPORT QgsExternalStorageFetchedContent : public QgsExternalStorageCo
     Q_OBJECT
 
   public:
-
     /**
      * Returns fetched resource file path
      */
@@ -193,7 +195,7 @@ class CORE_EXPORT QgsExternalStorageFetchedContent : public QgsExternalStorageCo
 
 /**
  * \ingroup core
- * \brief Class for QgsExternalStorage stored content
+ * \brief Abstract base class for QgsExternalStorage stored content.
  *
  * \since QGIS 3.22
  */
@@ -202,7 +204,6 @@ class CORE_EXPORT QgsExternalStorageStoredContent : public QgsExternalStorageCon
     Q_OBJECT
 
   public:
-
     /**
      * Returns stored resource URL
      */

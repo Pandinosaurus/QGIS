@@ -17,12 +17,12 @@
 #ifndef QGSAUTHPKCS12EDIT_H
 #define QGSAUTHPKCS12EDIT_H
 
-#include <QWidget>
-#include "qgsauthmethodedit.h"
 #include "ui_qgsauthpkcs12edit.h"
 
 #include "qgsauthconfig.h"
+#include "qgsauthmethodedit.h"
 
+#include <QWidget>
 
 class QgsAuthPkcs12Edit : public QgsAuthMethodEdit, private Ui::QgsAuthPkcs12Edit
 {
@@ -57,14 +57,13 @@ class QgsAuthPkcs12Edit : public QgsAuthMethodEdit, private Ui::QgsAuthPkcs12Edi
     void clearPkcs12BundlePass();
 
     void lePkcs12KeyPass_textChanged( const QString &pass );
-    void chkPkcs12PassShow_stateChanged( int state );
 
     void btnPkcs12Bundle_clicked();
 
   private:
     bool validityChange( bool curvalid );
 
-    bool populateCas( );
+    bool populateCas();
 
     QgsStringMap mConfigMap;
     bool mValid = false;

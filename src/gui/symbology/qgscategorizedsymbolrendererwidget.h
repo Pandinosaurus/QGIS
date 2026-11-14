@@ -15,16 +15,18 @@
 #ifndef QGSCATEGORIZEDSYMBOLRENDERERWIDGET_H
 #define QGSCATEGORIZEDSYMBOLRENDERERWIDGET_H
 
-#include "qgscategorizedsymbolrenderer.h"
 #include "qgis_sip.h"
-#include "qgsrendererwidget.h"
+#include "qgscategorizedsymbolrenderer.h"
 #include "qgsproxystyle.h"
+#include "qgsrendererwidget.h"
+#include "qgstemplatedcategorizedrendererwidget_p.h"
+
 #include <QStandardItem>
 #include <QStyledItemDelegate>
 
-
 class QgsCategorizedSymbolRenderer;
 class QgsRendererCategory;
+class QgsSymbolSelectorWidget;
 
 #include "ui_qgscategorizedsymbolrendererwidget.h"
 #include "qgis_gui.h"
@@ -33,46 +35,32 @@ class QgsRendererCategory;
 #ifndef SIP_RUN
 ///@cond PRIVATE
 
-class GUI_EXPORT QgsCategorizedSymbolRendererModel : public QAbstractItemModel
+class GUI_EXPORT QgsCategorizedSymbolRendererModel : public QgsTemplatedCategorizedRendererModel<QgsCategorizedSymbolRenderer>
 {
     Q_OBJECT
   public:
-    QgsCategorizedSymbolRendererModel( QObject *parent = nullptr );
-    Qt::ItemFlags flags( const QModelIndex &index ) const override;
-    Qt::DropActions supportedDropActions() const override;
-    QVariant data( const QModelIndex &index, int role ) const override;
-    bool setData( const QModelIndex &index, const QVariant &value, int role ) override;
+    QgsCategorizedSymbolRendererModel( QObject *parent = nullptr, QScreen *screen = nullptr );
+
+    Qt::ItemFlags extraFlags( const QModelIndex &index ) const override;
+    virtual QIcon symbolIcon( const QgsCategorizedSymbolRenderer::Category &category ) const override;
+    bool setExtraData( const QModelIndex &index, const QVariant &value ) override;
+    QVariant extraData( const QModelIndex &index, int role ) const override;
     QVariant headerData( int section, Qt::Orientation orientation, int role ) const override;
-    int rowCount( const QModelIndex &parent = QModelIndex() ) const override;
     int columnCount( const QModelIndex & = QModelIndex() ) const override;
-    QModelIndex index( int row, int column, const QModelIndex &parent = QModelIndex() ) const override;
-    QModelIndex parent( const QModelIndex &index ) const override;
-    QStringList mimeTypes() const override;
-    QMimeData *mimeData( const QModelIndexList &indexes ) const override;
-    bool dropMimeData( const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent ) override;
-
-    void setRenderer( QgsCategorizedSymbolRenderer *renderer );
-
-    void addCategory( const QgsRendererCategory &cat );
-    QgsRendererCategory category( const QModelIndex &index );
-    void deleteRows( QList<int> rows );
-    void removeAllRows();
     void sort( int column, Qt::SortOrder order = Qt::AscendingOrder ) override;
-    void updateSymbology();
 
   signals:
     void rowsMoved();
 
-  private:
-    QgsCategorizedSymbolRenderer *mRenderer = nullptr;
-    QString mMimeFormat;
+  protected:
+    void onRowsMoved() override;
 };
 
 /**
  * \ingroup gui
- * \brief View style which shows drop indicator line between items
+ * \brief View style which shows a drop indicator line between items
  */
-class QgsCategorizedSymbolRendererViewStyle: public QgsProxyStyle
+class GUI_EXPORT QgsCategorizedSymbolRendererViewStyle : public QgsProxyStyle
 {
     Q_OBJECT
 
@@ -86,7 +74,7 @@ class QgsCategorizedSymbolRendererViewStyle: public QgsProxyStyle
  * \ingroup gui
  * \brief Custom delegate for localized numeric input.
  */
-class QgsCategorizedRendererViewItemDelegate: public QStyledItemDelegate
+class GUI_EXPORT QgsCategorizedRendererViewItemDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
 
@@ -97,7 +85,6 @@ class QgsCategorizedRendererViewItemDelegate: public QStyledItemDelegate
     QWidget *createEditor( QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index ) const override;
 
   private:
-
     QgsFieldExpressionWidget *mFieldExpressionWidget = nullptr;
 };
 
@@ -109,20 +96,26 @@ class QgsCategorizedRendererViewItemDelegate: public QStyledItemDelegate
 /**
  * \ingroup gui
  * \class QgsCategorizedSymbolRendererWidget
+ * \brief A widget for configuring a QgsCategorizedSymbolRenderer.
  */
-class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, private Ui::QgsCategorizedSymbolRendererWidget, private QgsExpressionContextGenerator
+class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, private Ui::QgsCategorizedSymbolRendererWidget
 {
     Q_OBJECT
   public:
+    // *INDENT-OFF*
 
     /**
-     * CustomRoles enum represent custom roles for the widget.
-     * \since QGIS 3.22.1
+     * Custom model roles.
+     *
+     * \note Prior to QGIS 3.36 this was available as QgsCategorizedSymbolRendererWidget::CustomRoles
+     * \since QGIS 3.36
      */
-    enum CustomRoles
+    enum class CustomRole SIP_MONKEYPATCH_SCOPEENUM_UNNEST( QgsCategorizedSymbolRendererWidget, CustomRoles ) : int
     {
-      ValueRole = Qt::UserRole + 1 //!< Category value
+      Value SIP_MONKEYPATCH_COMPAT_NAME( ValueRole ) = Qt::UserRole + 1 //!< Category value
     };
+    Q_ENUM( CustomRole )
+    // *INDENT-ON*
 
     static QgsRendererWidget *create( QgsVectorLayer *layer, QgsStyle *style, QgsFeatureRenderer *renderer ) SIP_FACTORY;
 
@@ -132,6 +125,7 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
     QgsFeatureRenderer *renderer() override;
     void setContext( const QgsSymbolWidgetContext &context ) override;
     void disableSymbolLevels() override SIP_SKIP;
+    QgsExpressionContext createExpressionContext() const override;
 
     /**
      * Replaces category symbols with the symbols from a style that have a matching
@@ -140,7 +134,6 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
      * \returns number of symbols matched
      * \see matchToSymbolsFromLibrary
      * \see matchToSymbolsFromXml
-     * \since QGIS 2.9
      */
     int matchToSymbols( QgsStyle *style );
 
@@ -159,6 +152,11 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
     void deleteCategories();
     void deleteAllCategories();
 
+    /**
+     * Deletes unused categories from the widget which are not used by the layer renderer.
+     */
+    void deleteUnusedCategories();
+
     void showSymbolLevels();
 
     void rowsMoved();
@@ -168,7 +166,6 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
      * matching name.
      * \see matchToSymbolsFromXml
      * \see matchToSymbols
-     * \since QGIS 2.9
      */
     void matchToSymbolsFromLibrary();
 
@@ -177,7 +174,6 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
      * from the XML file with a matching name.
      * \see matchToSymbolsFromLibrary
      * \see matchToSymbols
-     * \since QGIS 2.9
      */
     void matchToSymbolsFromXml();
 
@@ -190,8 +186,7 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
 
   private slots:
 
-    void cleanUpSymbolSelector( QgsPanelWidget *container );
-    void updateSymbolsFromWidget();
+    void updateSymbolsFromWidget( QgsSymbolSelectorWidget *widget );
     void updateSymbolsFromButton();
     void dataDefinedSizeLegend();
 
@@ -214,7 +209,6 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
     void selectionChanged( const QItemSelection &selected, const QItemSelection &deselected );
 
   protected:
-
     void updateUiFromRenderer();
 
     // Called by virtual refreshSymbolView()
@@ -233,15 +227,24 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
     //! Applies current symbol to selected categories, or to all categories if none is selected
     void applyChangeToSymbol();
 
+    /**
+     * Returns the list of unique values in the current widget's layer for attribute name \a attrName.
+     *
+     * Called by addCategories() and deleteUnusedCategories()
+     *
+     * \deprecated QGIS 4.0. Use QgsVectorLayerUtils::uniqueValues instead.
+     */
+    Q_DECL_DEPRECATED QList<QVariant> layerUniqueValues( const QString &attrName ) SIP_DEPRECATED;
+
     QList<QgsSymbol *> selectedSymbols() override;
     QgsCategoryList selectedCategoryList();
     void refreshSymbolView() override;
     void keyPressEvent( QKeyEvent *event ) override;
 
   protected:
-    std::unique_ptr< QgsCategorizedSymbolRenderer > mRenderer;
+    std::unique_ptr<QgsCategorizedSymbolRenderer> mRenderer;
 
-    std::unique_ptr< QgsSymbol > mCategorizedSymbol;
+    std::unique_ptr<QgsSymbol> mCategorizedSymbol;
 
     QgsCategorizedSymbolRendererModel *mModel = nullptr;
 
@@ -252,8 +255,6 @@ class GUI_EXPORT QgsCategorizedSymbolRendererWidget : public QgsRendererWidget, 
     QAction *mMergeCategoriesAction = nullptr;
     QAction *mUnmergeCategoriesAction = nullptr;
     QAction *mActionLevels = nullptr;
-
-    QgsExpressionContext createExpressionContext() const override;
 
     friend class TestQgsCategorizedRendererWidget;
 };

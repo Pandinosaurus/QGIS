@@ -15,33 +15,62 @@
 
 #include "qgswcsprovidergui.h"
 
+#include "qgsmaplayer.h"
+#include "qgsowssourcewidget.h"
+#include "qgsproviderguimetadata.h"
+#include "qgsprovidersourcewidgetprovider.h"
+#include "qgssourceselectprovider.h"
+#include "qgswcsdataitemguiprovider.h"
 #include "qgswcsprovider.h"
 #include "qgswcssourceselect.h"
-#include "qgssourceselectprovider.h"
-#include "qgsproviderguimetadata.h"
-#include "qgswcsdataitemguiprovider.h"
 
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 //! Provider for WCS layers source select
 class QgsWcsSourceSelectProvider : public QgsSourceSelectProvider
 {
   public:
-
-    QString providerKey() const override { return QStringLiteral( "wcs" ); }
+    QString providerKey() const override { return u"wcs"_s; }
     QString text() const override { return QObject::tr( "WCS" ); }
     int ordering() const override { return QgsSourceSelectProvider::OrderRemoteProvider + 30; }
-    QIcon icon() const override { return QgsApplication::getThemeIcon( QStringLiteral( "/mActionAddWcsLayer.svg" ) ); }
-    QgsAbstractDataSourceWidget *createDataSourceWidget( QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::Widget, QgsProviderRegistry::WidgetMode widgetMode = QgsProviderRegistry::WidgetMode::Embedded ) const override
+    QIcon icon() const override { return QgsApplication::getThemeIcon( u"/mActionAddWcsLayer.svg"_s ); }
+    QgsAbstractDataSourceWidget *createDataSourceWidget(
+      QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::Widget, QgsProviderRegistry::WidgetMode widgetMode = QgsProviderRegistry::WidgetMode::Embedded
+    ) const override
     {
       return new QgsWCSSourceSelect( parent, fl, widgetMode );
     }
 };
 
 
+QgsWcsSourceWidgetProvider::QgsWcsSourceWidgetProvider()
+{}
+
+QString QgsWcsSourceWidgetProvider::providerKey() const
+{
+  return u"wcs"_s;
+}
+bool QgsWcsSourceWidgetProvider::canHandleLayer( QgsMapLayer *layer ) const
+{
+  return layer->providerType() == "wcs"_L1;
+}
+
+QgsProviderSourceWidget *QgsWcsSourceWidgetProvider::createWidget( QgsMapLayer *layer, QWidget *parent )
+{
+  if ( layer->providerType() != "wcs"_L1 )
+    return nullptr;
+
+  QgsOWSSourceWidget *sourceWidget = new QgsOWSSourceWidget( "wcs"_L1, parent );
+
+  return sourceWidget;
+}
+
+
 QgsWcsProviderGuiMetadata::QgsWcsProviderGuiMetadata()
   : QgsProviderGuiMetadata( QgsWcsProvider::WCS_KEY )
-{
-}
+{}
 
 QList<QgsSourceSelectProvider *> QgsWcsProviderGuiMetadata::sourceSelectProviders()
 {
@@ -52,8 +81,14 @@ QList<QgsSourceSelectProvider *> QgsWcsProviderGuiMetadata::sourceSelectProvider
 
 QList<QgsDataItemGuiProvider *> QgsWcsProviderGuiMetadata::dataItemGuiProviders()
 {
-  return QList<QgsDataItemGuiProvider *>()
-         << new QgsWcsDataItemGuiProvider;
+  return QList<QgsDataItemGuiProvider *>() << new QgsWcsDataItemGuiProvider;
+}
+
+QList<QgsProviderSourceWidgetProvider *> QgsWcsProviderGuiMetadata::sourceWidgetProviders()
+{
+  QList<QgsProviderSourceWidgetProvider *> providers;
+  providers << new QgsWcsSourceWidgetProvider();
+  return providers;
 }
 
 

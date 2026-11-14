@@ -16,18 +16,28 @@
  ***************************************************************************/
 
 #include "qgszipitem.h"
+
+#include <cpl_string.h>
+#include <cpl_vsi.h>
+#include <mutex>
+
 #include "qgsapplication.h"
 #include "qgsdataitemprovider.h"
 #include "qgsdataitemproviderregistry.h"
-#include <QFileInfo>
+#include "qgsgdalutils.h"
+#include "qgssettings.h"
+#include "qgssettingsregistrycore.h"
 
-#include <cpl_vsi.h>
-#include <cpl_string.h>
-#include <mutex>
+#include <QFileInfo>
+#include <QString>
+
+#include "moc_qgszipitem.cpp"
+
+using namespace Qt::StringLiterals;
 
 QIcon QgsZipItem::iconZip()
 {
-  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconZip.svg" ) );
+  return QgsApplication::getThemeIcon( u"/mIconZip.svg"_s );
 }
 
 
@@ -42,9 +52,7 @@ QgsZipItem::QgsZipItem( QgsDataItem *parent, const QString &name, const QString 
   init();
 }
 
-QgsZipItem::QgsZipItem( QgsDataItem *parent, const QString &name,
-                        const QString &filePath, const QString &path,
-                        const QString &providerKey )
+QgsZipItem::QgsZipItem( QgsDataItem *parent, const QString &name, const QString &filePath, const QString &path, const QString &providerKey )
   : QgsDataCollectionItem( parent, name, path, providerKey )
   , mFilePath( filePath )
 {
@@ -54,16 +62,13 @@ QgsZipItem::QgsZipItem( QgsDataItem *parent, const QString &name,
 void QgsZipItem::init()
 {
   mType = Qgis::BrowserItemType::Collection; //Zip??
-  mIconName = QStringLiteral( "/mIconZip.svg" );
-  mVsiPrefix = vsiPrefix( mFilePath );
+  mIconName = u"/mIconZip.svg"_s;
+  mVsiPrefix = QgsGdalUtils::vsiPrefixForPath( mFilePath );
 
   setCapabilities( capabilities2() | Qgis::BrowserItemCapability::ItemRepresentsFile );
 
   static std::once_flag initialized;
-  std::call_once( initialized, [ = ]
-  {
-    sProviderNames << QStringLiteral( "files" );
-  } );
+  std::call_once( initialized, [] { sProviderNames << u"files"_s; } );
 }
 
 bool QgsZipItem::hasDragEnabled() const
@@ -74,25 +79,29 @@ bool QgsZipItem::hasDragEnabled() const
 QgsMimeDataUtils::UriList QgsZipItem::mimeUris() const
 {
   QgsMimeDataUtils::Uri u;
-  u.layerType = QStringLiteral( "collection" );
+  u.layerType = u"collection"_s;
   u.uri = path();
   u.filePath = path();
   return { u };
+}
+
+QString QgsZipItem::vsiPrefix( const QString &uri )
+{
+  return QgsGdalUtils::vsiPrefixForPath( uri );
 }
 
 QVector<QgsDataItem *> QgsZipItem::createChildren()
 {
   QVector<QgsDataItem *> children;
   QString tmpPath;
-  const QgsSettings settings;
-  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QString scanZipSetting = QgsSettingsRegistryCore::settingsScanZipInBrowser->value();
 
   mZipFileList.clear();
 
-  QgsDebugMsgLevel( QStringLiteral( "mFilePath = %1 path = %2 name= %3 scanZipSetting= %4 vsiPrefix= %5" ).arg( mFilePath, path(), name(), scanZipSetting, mVsiPrefix ), 3 );
+  QgsDebugMsgLevel( u"mFilePath = %1 path = %2 name= %3 scanZipSetting= %4 vsiPrefix= %5"_s.arg( mFilePath, path(), name(), scanZipSetting, mVsiPrefix ), 3 );
 
   // if scanZipBrowser == no: skip to the next file
-  if ( scanZipSetting == QLatin1String( "no" ) )
+  if ( scanZipSetting == "no"_L1 )
   {
     return children;
   }
@@ -116,20 +125,20 @@ QVector<QgsDataItem *> QgsZipItem::createChildren()
         continue;
 
       // ugly hack to remove .dbf file if there is a .shp file
-      if ( provider->name() == QLatin1String( "OGR" ) )
+      if ( provider->name() == "OGR"_L1 )
       {
-        if ( info.suffix().compare( QLatin1String( "dbf" ), Qt::CaseInsensitive ) == 0 )
+        if ( info.suffix().compare( "dbf"_L1, Qt::CaseInsensitive ) == 0 )
         {
           if ( mZipFileList.indexOf( fileName.left( fileName.count() - 4 ) + ".shp" ) != -1 )
             continue;
         }
-        if ( info.completeSuffix().compare( QLatin1String( "shp.xml" ), Qt::CaseInsensitive ) == 0 )
+        if ( info.completeSuffix().compare( "shp.xml"_L1, Qt::CaseInsensitive ) == 0 )
         {
           continue;
         }
       }
 
-      QgsDebugMsgLevel( QStringLiteral( "trying to load item %1 with %2" ).arg( tmpPath, provider->name() ), 3 );
+      QgsDebugMsgLevel( u"trying to load item %1 with %2"_s.arg( tmpPath, provider->name() ), 3 );
       QgsDataItem *item = provider->createDataItem( tmpPath, this );
       if ( item )
       {
@@ -139,7 +148,7 @@ QVector<QgsDataItem *> QgsZipItem::createChildren()
       }
       else
       {
-        QgsDebugMsgLevel( QStringLiteral( "not loaded item" ), 3 );
+        QgsDebugMsgLevel( u"not loaded item"_s, 3 );
       }
     }
   }
@@ -154,56 +163,49 @@ QgsDataItem *QgsZipItem::itemFromPath( QgsDataItem *parent, const QString &path,
 
 QgsDataItem *QgsZipItem::itemFromPath( QgsDataItem *parent, const QString &filePath, const QString &name, const QString &path )
 {
-  const QgsSettings settings;
-  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QString scanZipSetting = QgsSettingsRegistryCore::settingsScanZipInBrowser->value();
   QStringList zipFileList;
-  const QString vsiPrefix = QgsZipItem::vsiPrefix( filePath );
-  QgsZipItem *zipItem = nullptr;
+  const QString vsiPrefix = QgsGdalUtils::vsiPrefixForPath( filePath );
   bool populated = false;
 
-  QgsDebugMsgLevel( QStringLiteral( "path = %1 name= %2 scanZipSetting= %3 vsiPrefix= %4" ).arg( path, name, scanZipSetting, vsiPrefix ), 3 );
+  QgsDebugMsgLevel( u"path = %1 name= %2 scanZipSetting= %3 vsiPrefix= %4"_s.arg( path, name, scanZipSetting, vsiPrefix ), 3 );
 
   // don't scan if scanZipBrowser == no
-  if ( scanZipSetting == QLatin1String( "no" ) )
+  if ( scanZipSetting == "no"_L1 )
     return nullptr;
 
-  // don't scan if this file is not a /vsizip/ or /vsitar/ item
-  if ( ( vsiPrefix != QLatin1String( "/vsizip/" ) && vsiPrefix != QLatin1String( "/vsitar/" ) ) )
+  // don't scan if this file is not a vsi container archive item
+  if ( !QgsGdalUtils::isVsiArchivePrefix( vsiPrefix ) )
     return nullptr;
 
-  zipItem = new QgsZipItem( parent, name, filePath, path );
+  auto zipItem = std::make_unique< QgsZipItem >( parent, name, filePath, path );
+  // force populate zipItem if it has less than 10 items and is not a .tgz or .tar.gz file (slow loading)
+  // for other items populating will be delayed until item is opened
+  // this might be polluting the tree with empty items but is necessary for performance reasons
+  // could also accept all files smaller than a certain size and add options for file count and/or size
 
-  if ( zipItem )
+  // first get list of files inside .zip or .tar files
+  if ( path.endsWith( ".zip"_L1, Qt::CaseInsensitive ) || path.endsWith( ".tar"_L1, Qt::CaseInsensitive ) )
   {
-    // force populate zipItem if it has less than 10 items and is not a .tgz or .tar.gz file (slow loading)
-    // for other items populating will be delayed until item is opened
-    // this might be polluting the tree with empty items but is necessary for performance reasons
-    // could also accept all files smaller than a certain size and add options for file count and/or size
-
-    // first get list of files inside .zip or .tar files
-    if ( path.endsWith( QLatin1String( ".zip" ), Qt::CaseInsensitive ) ||
-         path.endsWith( QLatin1String( ".tar" ), Qt::CaseInsensitive ) )
-    {
-      zipFileList = zipItem->getZipFileList();
-    }
-    // force populate if less than 10 items
-    if ( !zipFileList.isEmpty() && zipFileList.count() <= 10 )
-    {
-      zipItem->populate( zipItem->createChildren() );
-      populated = true; // there is no QgsDataItem::isPopulated() function
-      QgsDebugMsgLevel( QStringLiteral( "Got zipItem with %1 children, path=%2, name=%3" ).arg( zipItem->rowCount() ).arg( zipItem->path(), zipItem->name() ), 3 );
-    }
-    else
-    {
-      QgsDebugMsgLevel( QStringLiteral( "Delaying populating zipItem with path=%1, name=%2" ).arg( zipItem->path(), zipItem->name() ), 3 );
-    }
+    zipFileList = zipItem->getZipFileList();
+  }
+  // force populate if less than 10 items
+  if ( !zipFileList.isEmpty() && zipFileList.count() <= 10 )
+  {
+    zipItem->populate( zipItem->createChildren() );
+    populated = true; // there is no QgsDataItem::isPopulated() function
+    QgsDebugMsgLevel( u"Got zipItem with %1 children, path=%2, name=%3"_s.arg( zipItem->rowCount() ).arg( zipItem->path(), zipItem->name() ), 3 );
+  }
+  else
+  {
+    QgsDebugMsgLevel( u"Delaying populating zipItem with path=%1, name=%2"_s.arg( zipItem->path(), zipItem->name() ), 3 );
   }
 
   // only display if has children or if is not populated
-  if ( zipItem && ( !populated || zipItem->rowCount() > 0 ) )
+  if ( !populated || zipItem->rowCount() > 0 )
   {
-    QgsDebugMsgLevel( QStringLiteral( "returning zipItem" ), 3 );
-    return zipItem;
+    QgsDebugMsgLevel( u"returning zipItem"_s, 3 );
+    return zipItem.release();
   }
 
   return nullptr;
@@ -211,42 +213,39 @@ QgsDataItem *QgsZipItem::itemFromPath( QgsDataItem *parent, const QString &fileP
 
 QStringList QgsZipItem::getZipFileList()
 {
-  if ( ! mZipFileList.isEmpty() )
+  if ( !mZipFileList.isEmpty() )
     return mZipFileList;
 
   QString tmpPath;
-  const QgsSettings settings;
-  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QString scanZipSetting = QgsSettingsRegistryCore::settingsScanZipInBrowser->value();
 
-  QgsDebugMsgLevel( QStringLiteral( "mFilePath = %1 name= %2 scanZipSetting= %3 vsiPrefix= %4" ).arg( mFilePath, name(), scanZipSetting, mVsiPrefix ), 3 );
+  QgsDebugMsgLevel( u"mFilePath = %1 name= %2 scanZipSetting= %3 vsiPrefix= %4"_s.arg( mFilePath, name(), scanZipSetting, mVsiPrefix ), 3 );
 
   // if scanZipBrowser == no: skip to the next file
-  if ( scanZipSetting == QLatin1String( "no" ) )
+  if ( scanZipSetting == "no"_L1 )
   {
     return mZipFileList;
   }
 
   // get list of files inside zip file
-  QgsDebugMsgLevel( QStringLiteral( "Open file %1 with gdal vsi" ).arg( mVsiPrefix + mFilePath ), 3 );
-  char **papszSiblingFiles = VSIReadDirRecursive( QString( mVsiPrefix + mFilePath ).toLocal8Bit().constData() );
+  QgsDebugMsgLevel( u"Open file %1 with gdal vsi"_s.arg( mVsiPrefix + mFilePath ), 3 );
+  char **papszSiblingFiles = VSIReadDirRecursive( QString( mVsiPrefix + mFilePath ).toUtf8().constData() );
   if ( papszSiblingFiles )
   {
     for ( int i = 0; papszSiblingFiles[i]; i++ )
     {
       tmpPath = papszSiblingFiles[i];
-      QgsDebugMsgLevel( QStringLiteral( "Read file %1" ).arg( tmpPath ), 3 );
+      QgsDebugMsgLevel( u"Read file %1"_s.arg( tmpPath ), 3 );
       // skip directories (files ending with /)
-      if ( tmpPath.right( 1 ) != QLatin1String( "/" ) )
+      if ( tmpPath.right( 1 ) != "/"_L1 )
         mZipFileList << tmpPath;
     }
     CSLDestroy( papszSiblingFiles );
   }
   else
   {
-    QgsDebugMsg( QStringLiteral( "Error reading %1" ).arg( mFilePath ) );
+    QgsDebugError( u"Error reading %1"_s.arg( mFilePath ) );
   }
 
   return mZipFileList;
 }
-
-

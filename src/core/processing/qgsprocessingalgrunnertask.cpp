@@ -16,21 +16,25 @@
  ***************************************************************************/
 
 #include "qgsprocessingalgrunnertask.h"
-#include "qgsprocessingfeedback.h"
-#include "qgsprocessingcontext.h"
-#include "qgsprocessingalgorithm.h"
-#include "qgsprocessingutils.h"
-#include "qgsvectorlayer.h"
 
-QgsProcessingAlgRunnerTask::QgsProcessingAlgRunnerTask( const QgsProcessingAlgorithm *algorithm, const QVariantMap &parameters, QgsProcessingContext &context, QgsProcessingFeedback *feedback )
-  : QgsTask( tr( "Executing “%1”" ).arg( algorithm->displayName() ), algorithm->flags() & QgsProcessingAlgorithm::FlagCanCancel ? QgsTask::CanCancel : QgsTask::Flag() )
+#include <memory>
+
+#include "qgsmessagelog.h"
+#include "qgsprocessingalgorithm.h"
+#include "qgsprocessingcontext.h"
+#include "qgsprocessingfeedback.h"
+
+#include "moc_qgsprocessingalgrunnertask.cpp"
+
+QgsProcessingAlgRunnerTask::QgsProcessingAlgRunnerTask( const QgsProcessingAlgorithm *algorithm, const QVariantMap &parameters, QgsProcessingContext &context, QgsProcessingFeedback *feedback, Flags flags )
+  : QgsTask( tr( "Executing “%1”" ).arg( algorithm->displayName() ), flags & ( !( algorithm->flags() & Qgis::ProcessingAlgorithmFlag::CanCancel ) ? ( ~QgsTask::CanCancel ) : ( ~QgsTask::Flags() ) ) )
   , mParameters( parameters )
   , mContext( context )
   , mFeedback( feedback )
 {
   if ( !mFeedback )
   {
-    mOwnedFeedback.reset( new QgsProcessingFeedback() );
+    mOwnedFeedback = std::make_unique<QgsProcessingFeedback>();
     mFeedback = mOwnedFeedback.get();
   }
   try
@@ -78,10 +82,6 @@ bool QgsProcessingAlgRunnerTask::run()
 void QgsProcessingAlgRunnerTask::finished( bool result )
 {
   Q_UNUSED( result )
-  QVariantMap ppResults;
-  if ( result )
-  {
-    ppResults = mAlgorithm->postProcess( mContext, mFeedback );
-  }
+  const QVariantMap ppResults = mAlgorithm->postProcess( mContext, mFeedback, result );
   emit executed( result, !ppResults.isEmpty() ? ppResults : mResults );
 }

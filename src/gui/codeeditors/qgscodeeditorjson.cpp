@@ -13,24 +13,28 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "qgsapplication.h"
 #include "qgscodeeditorjson.h"
 
-#include <QWidget>
-#include <QString>
 #include <QFont>
+#include <QString>
+#include <QWidget>
 #include <Qsci/qscilexerjson.h>
 
+#include "moc_qgscodeeditorjson.cpp"
 
 QgsCodeEditorJson::QgsCodeEditorJson( QWidget *parent )
-  : QgsCodeEditor( parent )
+  : QgsCodeEditor( parent, QString(), false, false, QgsCodeEditor::Flag::CodeFolding )
 {
   if ( !parent )
   {
     setTitle( tr( "JSON Editor" ) );
   }
-  setFoldingVisible( true );
   QgsCodeEditorJson::initializeLexer();
+}
+
+Qgis::ScriptLanguage QgsCodeEditorJson::language() const
+{
+  return Qgis::ScriptLanguage::Json;
 }
 
 void QgsCodeEditorJson::initializeLexer()

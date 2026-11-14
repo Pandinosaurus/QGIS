@@ -26,7 +26,7 @@ void QgsHistogram::prepareValues()
   std::sort( mValues.begin(), mValues.end() );
 
   QgsStatisticalSummary s;
-  s.setStatistics( QgsStatisticalSummary::Max | QgsStatisticalSummary::Min | QgsStatisticalSummary::InterQuartileRange );
+  s.setStatistics( Qgis::Statistic::Max | Qgis::Statistic::Min | Qgis::Statistic::InterQuartileRange );
   s.calculate( mValues );
   mMin = s.min();
   mMax = s.max();
@@ -104,10 +104,8 @@ QList<int> QgsHistogram::counts( int bins ) const
   if ( currentValueIndex < mValues.count() )
   {
     //last value needs to be added
-    binCounts[ bins - 1 ] = binCounts.last() + 1;
+    binCounts[bins - 1] = binCounts.last() + 1;
   }
 
   return binCounts;
 }
-
-

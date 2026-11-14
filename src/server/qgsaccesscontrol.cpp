@@ -16,16 +16,20 @@
  ***************************************************************************/
 
 #include "qgsaccesscontrol.h"
+
 #include "qgsfeaturerequest.h"
 #include "qgsmaplayer.h"
 #include "qgsvectorlayer.h"
 
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 void QgsAccessControl::resolveFilterFeatures( const QList<QgsMapLayer *> &layers )
 {
   for ( QgsMapLayer *l : layers )
   {
-    if ( l->type() == QgsMapLayerType::VectorLayer )
+    if ( l->type() == Qgis::LayerType::Vector )
     {
       const QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( l );
       mFilterFeaturesExpressions[vl->id()] = resolveFilterFeatures( vl );
@@ -52,16 +56,22 @@ QString QgsAccessControl::resolveFilterFeatures( const QgsVectorLayer *layer ) c
   QString expression;
   if ( !expressions.isEmpty() )
   {
-    expression = QStringLiteral( "((" ).append( expressions.join( QLatin1String( ") AND (" ) ) ).append( "))" );
+    expression = u"(("_s.append( expressions.join( ") AND ("_L1 ) ).append( "))" );
   }
 
   return expression;
 }
 
+//! Clear feature's filter of layers
+void QgsAccessControl::unresolveFilterFeatures()
+{
+  mFilterFeaturesExpressions.clear();
+  mResolved = false;
+}
+
 //! Filter the features of the layer
 void QgsAccessControl::filterFeatures( const QgsVectorLayer *layer, QgsFeatureRequest &featureRequest ) const
 {
-
   QString expression;
 
   if ( mResolved && mFilterFeaturesExpressions.contains( layer->id() ) )
@@ -80,7 +90,7 @@ void QgsAccessControl::filterFeatures( const QgsVectorLayer *layer, QgsFeatureRe
 }
 
 //! Clone the object
-QgsFeatureFilterProvider *QgsAccessControl::clone() const
+QgsAccessControl *QgsAccessControl::clone() const
 {
   return new QgsAccessControl( *this );
 }
@@ -98,7 +108,7 @@ QString QgsAccessControl::extraSubsetString( const QgsVectorLayer *layer ) const
       sqls.append( sql );
     }
   }
-  return sqls.isEmpty() ? QString() : QStringLiteral( "((" ).append( sqls.join( QLatin1String( ") AND (" ) ) ).append( "))" );
+  return sqls.isEmpty() ? QString() : u"(("_s.append( sqls.join( ") AND ("_L1 ) ).append( "))" );
 }
 
 //! Returns the layer read right
@@ -190,7 +200,7 @@ bool QgsAccessControl::fillCacheKey( QStringList &cacheKey ) const
   for ( acIterator = mPluginsAccessControls->constBegin(); acIterator != mPluginsAccessControls->constEnd(); ++acIterator )
   {
     const QString newKey = acIterator.value()->cacheKey();
-    if ( ! newKey.isEmpty() )
+    if ( !newKey.isEmpty() )
     {
       cacheKey.clear();
       return false;

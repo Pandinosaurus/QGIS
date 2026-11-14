@@ -16,14 +16,15 @@
 #ifndef QGSBACKGROUNDCACHEDSHAREDDATA_H
 #define QGSBACKGROUNDCACHEDSHAREDDATA_H
 
-#include "qgsbackgroundcachedfeatureiterator.h"
-#include "qgsrectangle.h"
-#include "qgsspatialiteutils.h"
+#include <map>
+
 #include "qgscachedirectorymanager.h"
+#include "qgsfeaturedownloadcommon.h"
+#include "qgsrectangle.h"
+#include "qgsspatialindex.h"
+#include "qgswfsdatasourceuri.h"
 
 #include <QSet>
-
-#include <map>
 
 class QgsBackgroundCachedFeatureIterator;
 class QgsFeatureDownloader;
@@ -58,7 +59,7 @@ class QgsThreadedFeatureDownloader;
 class QgsBackgroundCachedSharedData
 {
   public:
-    QgsBackgroundCachedSharedData( const QString &providerName, const QString &componentTranslated );
+    QgsBackgroundCachedSharedData( const QString &uri, const QString &providerName, const QString &componentTranslated );
     virtual ~QgsBackgroundCachedSharedData();
 
     //////////// Methods to be used by provider
@@ -124,6 +125,9 @@ class QgsBackgroundCachedSharedData
     //! Return current BBOX used by the downloader
     const QgsRectangle &currentRect() const { return mRect; }
 
+    //! Set current BBOX used by the downloader.
+    void setCurrentRect( const QgsRectangle &rect ) { mRect = rect; }
+
     //! Returns a unique identifier made from feature content
     static QString getMD5( const QgsFeature &f );
 
@@ -136,7 +140,7 @@ class QgsBackgroundCachedSharedData
      * Used by a QgsBackgroundCachedFeatureIterator to start a downloader and get the
      * generation counter.
     */
-    int registerToCache( QgsBackgroundCachedFeatureIterator *iterator, int limit, const QgsRectangle &rect = QgsRectangle() );
+    int registerToCache( QgsBackgroundCachedFeatureIterator *iterator, int limit, const QgsRectangle &rect = QgsRectangle(), const QString &serverExpression = QString() );
 
     /**
      * Used by the rewind() method of an iterator so as to get the up-to-date
@@ -167,24 +171,37 @@ class QgsBackgroundCachedSharedData
 
     //////// Pure virtual methods
 
+    //! Returns computed server expression
+    virtual QString computedExpression( const QgsExpression &expression ) const = 0;
+
     //! Instantiate a new feature downloader implementation.
     virtual std::unique_ptr<QgsFeatureDownloaderImpl> newFeatureDownloaderImpl( QgsFeatureDownloader *, bool requestMadeFromMainThread ) = 0;
 
     //! Return whether the GetFeature request should include the request bounding box.
     virtual bool isRestrictedToRequestBBOX() const = 0;
 
+    //! Return provider geometry attribute name
+    const QString &geometryAttribute() const { return mGeometryAttribute; }
+
     //! Return whether the layer has a geometry field
     virtual bool hasGeometry() const = 0;
 
     //! Return layer name
-    virtual QString layerName() const = 0;
+    QString layerName() const { return mURI.typeName(); }
 
     //! Called when an error must be raised to the provider
     virtual void pushError( const QString &errorMsg ) const = 0;
 
+    //! Geometry type of the features in this layer
+    Qgis::WkbType mWKBType = Qgis::WkbType::Unknown;
+
   protected:
+    friend class QgsXmlSchemaAnalyzer;
 
     //////////// Input members. Implementations should define them to meaningful values
+
+    //! Datasource URI
+    QgsWFSDataSourceURI mURI;
 
     //! Attribute fields of the layer
     QgsFields mFields;
@@ -216,7 +233,28 @@ class QgsBackgroundCachedSharedData
     //! Whether progress dialog should be hidden
     bool mHideProgressDialog = false;
 
+    //! Server filter expression
+    QString mServerExpression;
+
+    //! Map a field name to the pair (xpath, isNestedContent)
+    QMap<QString, QPair<QString, bool>> mFieldNameToXPathAndIsNestedContentMap;
+
+    //! Map a namespace prefix to its URI
+    QMap<QString, QString> mNamespacePrefixToURIMap;
+
+    //! Namespace URL of the server (comes from DescribeFeatureDocument)
+    QString mApplicationNamespace;
+
+    //! If we have already issued a warning about missing feature ids
+    bool mHasWarnedAboutMissingFeatureId = false;
+
+    //! Name of geometry attribute
+    QString mGeometryAttribute;
+
     //////////// Methods
+
+    //! To be used by the clone() method of derived classes
+    void copyStateToClone( QgsBackgroundCachedSharedData *clone ) const;
 
     //! Should be called in the destructor of the implementation of this class !
     void cleanup();
@@ -225,7 +263,6 @@ class QgsBackgroundCachedSharedData
     virtual bool detectPotentialServerAxisOrderIssueFromSingleFeatureExtent() const { return false; }
 
   private:
-
     //! Cache directory manager
     QgsCacheDirectoryManager &mCacheDirectoryManager;
 
@@ -257,7 +294,7 @@ class QgsBackgroundCachedSharedData
     QgsSpatialIndex mCachedRegions;
 
     //! Requested cached regions
-    QVector< QgsFeature > mRegions;
+    QVector<QgsFeature> mRegions;
 
     //! Limit of retrieved number of features for the current request
     int mRequestLimit = 0;

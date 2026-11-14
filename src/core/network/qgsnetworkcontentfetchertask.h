@@ -20,10 +20,12 @@
 #ifndef QGSNETWORKCONTENTFETCHERTASK_H
 #define QGSNETWORKCONTENTFETCHERTASK_H
 
-#include "qgstaskmanager.h"
 #include "qgis_core.h"
-#include <QNetworkRequest>
+#include "qgshttpheaders.h"
+#include "qgstaskmanager.h"
+
 #include <QNetworkReply>
+#include <QNetworkRequest>
 
 class QgsNetworkContentFetcher;
 
@@ -49,22 +51,33 @@ class CORE_EXPORT QgsNetworkContentFetcherTask : public QgsTask
     Q_OBJECT
 
   public:
-
     /**
      * Constructor for a QgsNetworkContentFetcherTask which fetches
      * the specified \a url.
      *
      * Optionally, authentication configuration can be set via the \a authcfg argument.
+     *
+     * Since QGIS 3.28 the optional \a description can be explicitly set. If not specified, a default task description will be generated.
+     *
+     * Since QGIS 3.44.8 the optional \a headers can be used to add custom HTTP headers to the request.
      */
-    QgsNetworkContentFetcherTask( const QUrl &url, const QString &authcfg = QString(), QgsTask::Flags flags = QgsTask::CanCancel );
+    QgsNetworkContentFetcherTask(
+      const QUrl &url, const QString &authcfg = QString(), QgsTask::Flags flags = QgsTask::CanCancel, const QString &description = QString(), const QgsHttpHeaders &headers = QgsHttpHeaders()
+    );
 
     /**
      * Constructor for a QgsNetworkContentFetcherTask which fetches
      * the specified network \a request.
      *
      * Optionally, authentication configuration can be set via the \a authcfg argument.
+     *
+     * Since QGIS 3.28 the optional \a description can be explicitly set. If not specified, a default task description will be generated.
+     *
+     * Since QGIS 3.44.8 the optional \a headers can be used to add custom HTTP headers to the request.
      */
-    QgsNetworkContentFetcherTask( const QNetworkRequest &request, const QString &authcfg = QString(), QgsTask::Flags flags = QgsTask::CanCancel );
+    QgsNetworkContentFetcherTask(
+      const QNetworkRequest &request, const QString &authcfg = QString(), QgsTask::Flags flags = QgsTask::CanCancel, const QString &description = QString(), const QgsHttpHeaders &headers = QgsHttpHeaders()
+    );
 
     ~QgsNetworkContentFetcherTask() override;
 
@@ -80,6 +93,13 @@ class CORE_EXPORT QgsNetworkContentFetcherTask : public QgsTask
      * the QgsNetworkContentFetcherTask::fetched() signal.
      */
     QNetworkReply *reply();
+
+    /**
+     * Returns the associated filename from the reply's content disposition header, if present.
+     *
+     * \since QGIS 3.28
+     */
+    QString contentDispositionFilename() const;
 
     /**
      * Returns the fetched content as a string
@@ -111,12 +131,11 @@ class CORE_EXPORT QgsNetworkContentFetcherTask : public QgsTask
     void errorOccurred( QNetworkReply::NetworkError code, const QString &errorMsg );
 
   private:
-
     QNetworkRequest mRequest;
     QString mAuthcfg;
     QgsNetworkContentFetcher *mFetcher = nullptr;
     QString mMode;
-    QIODevice *mContent = nullptr;
+    QgsHttpHeaders mHeaders;
 };
 
 #endif //QGSNETWORKCONTENTFETCHERTASK_H

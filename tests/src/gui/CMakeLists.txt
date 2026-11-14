@@ -11,27 +11,27 @@ include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-if(ENABLE_MODELTEST)
-  include_directories(${CMAKE_SOURCE_DIR}/tests/qt_modeltest)
-endif()
-
 # a simple app for testing GUI of renderers
 # These tests are old and are never run so removed for now.
-#set(rendererv2gui_SRCS testrenderergui.cpp)
-#set(rendererv2gui_HDRS testrenderergui.h)
-#add_executable(qgis_rendererv2gui ${rendererv2gui_SRCS} ${rendererv2gui_MOC_SRCS})
 
 #ADD_QGIS_TEST(histogramtest testqgsrasterhistogram.cpp)
 
 set(TESTS
+  testqgsadvanceddigitizingdockwidget.cpp
+  testqgsadvanceddigitizingtoolsregistry.cpp
   testqgsannotationitemguiregistry.cpp
+  testqgsbezierdata.cpp
   testqgsmaptoolzoom.cpp
   testqgsmaptooledit.cpp
   testqgscategorizedrendererwidget.cpp
   testqgsdatumtransformdialog.cpp
+  testqgsdiagramproperties.cpp
+  testqgsdockablewidgethelper.cpp
   testqgsdoublespinbox.cpp
   testqgsdualview.cpp
   testqgsattributeform.cpp
+  testqgsattributesformmodel.cpp
+  testqgsattributesformproperties.cpp
   testqgsdatetimeedit.cpp
   testqgsdockwidget.cpp
   testqgsfieldexpressionwidget.cpp
@@ -44,8 +44,11 @@ set(TESTS
   testqgsmessagebar.cpp
   testprojectionissues.cpp
   testqgsgui.cpp
+  testqgsgdalguiutils.cpp
+  testqgsprocessingmodelgui.cpp
   testprocessinggui.cpp
   testqgsprocessingmodel.cpp
+  testqgssymbollayermodel.cpp
   testqgsrubberband.cpp
   testqgsscalecombobox.cpp
   testqgsscalerangewidget.cpp
@@ -55,10 +58,16 @@ set(TESTS
   testqgseditorwidgetregistry.cpp
   testqgskeyvaluewidget.cpp
   testqgsfiledownloader.cpp
+  testqgsfileuploader.cpp
   testqgslayoutgui.cpp
+  testqgslayoutitemlistview.cpp
   testqgslayoutview.cpp
+  testqgsmaptooleditblanksegments.cpp
+  testqgsmaptoolextraitem.cpp
   testqgsvaluemapwidgetwrapper.cpp
+  testqgsvaluemapconfigdlg.cpp
   testqgsvaluerelationwidgetwrapper.cpp
+  testqgsrelationeditorwidget.cpp
   testqgsrelationreferencewidget.cpp
   testqgsfeaturelistcombobox.cpp
   testqgstexteditwrapper.cpp
@@ -71,15 +80,20 @@ set(TESTS
   testqgsexternalresourcewidgetwrapper.cpp
   testqgsquerybuilder.cpp
   testqgsqueryresultwidget.cpp
+  testqgscompoundcolorwidget.cpp
+  testqgsmaskingwidget.cpp
+  testqgssvgselectorwidget.cpp
+  testqgslabelingwidget.cpp
+  testqgsmeshrendererscalarsettingswidget.cpp
+  testqgsqmlwidgetwrapper.cpp
 )
 
 foreach(TESTSRC ${TESTS})
   add_qgis_test( ${TESTSRC} MODULE gui LINKEDLIBRARIES qgis_gui qgis_analysis)
 endforeach(TESTSRC)
 
-add_qgis_test(testqgsrasterlayersaveasdialog.cpp MODULE gui LINKEDLIBRARIES qgis_gui qgis_analysis provider_postgres_gui_a)
-add_qgis_test(testqgslistwidget.cpp MODULE gui LINKEDLIBRARIES qgis_gui qgis_analysis LABELS "POSTGRES")
-
+add_qgis_test(testqgsrasterlayersaveasdialog.cpp MODULE gui LINKEDLIBRARIES qgis_gui qgis_analysis)
+add_qgis_test(testqgslistwidget.cpp MODULE gui LINKEDLIBRARIES qgis_gui qgis_analysis)
 
 if (ENABLE_PGTEST)
   SET_TESTS_PROPERTIES(
@@ -88,5 +102,6 @@ if (ENABLE_PGTEST)
     test_gui_texteditwrapper
     test_gui_newdatabasetablewidget
     test_gui_queryresultwidget
+    test_gui_listwidget
     PROPERTIES LABELS "POSTGRES")
 endif()

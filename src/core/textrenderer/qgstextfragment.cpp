@@ -14,21 +14,26 @@
  ***************************************************************************/
 
 #include "qgstextfragment.h"
-#include <QFontMetricsF>
-#include <QTextFragment>
+
 #include "qgsstringutils.h"
 
+#include <QFontMetricsF>
+#include <QString>
+#include <QTextFragment>
+
+using namespace Qt::StringLiterals;
+
 QgsTextFragment::QgsTextFragment( const QString &text, const QgsTextCharacterFormat &format )
-  : mText( text )
+  : mText( text != u"\ufffc"_s ? text : QString() )
+  , mIsImage( text == u"\ufffc"_s )
   , mCharFormat( format )
 {}
 
 QgsTextFragment::QgsTextFragment( const QTextFragment &fragment )
-  : mText( fragment.text() )
-  , mCharFormat( QgsTextCharacterFormat( fragment.charFormat() ) )
-{
-
-}
+  : mText( fragment.text() != u"\ufffc"_s ? fragment.text() : QString() )
+  , mIsImage( fragment.text() == u"\ufffc"_s )
+  , mCharFormat( fragment.charFormat() )
+{}
 
 QString QgsTextFragment::text() const
 {
@@ -45,7 +50,12 @@ void QgsTextFragment::setCharacterFormat( const QgsTextCharacterFormat &charForm
   mCharFormat = charFormat;
 }
 
-double QgsTextFragment::horizontalAdvance( const QFont &font, bool fontHasBeenUpdatedForFragment, double scaleFactor ) const
+bool QgsTextFragment::isImage() const
+{
+  return mIsImage;
+}
+
+double QgsTextFragment::horizontalAdvance( const QFont &font, const QgsRenderContext &context, bool fontHasBeenUpdatedForFragment, double scaleFactor ) const
 {
   if ( fontHasBeenUpdatedForFragment )
   {
@@ -55,7 +65,7 @@ double QgsTextFragment::horizontalAdvance( const QFont &font, bool fontHasBeenUp
   else
   {
     QFont updatedFont = font;
-    mCharFormat.updateFontForFormat( updatedFont, scaleFactor );
+    mCharFormat.updateFontForFormat( updatedFont, context, scaleFactor );
     const QFontMetricsF fm( updatedFont );
     return fm.horizontalAdvance( mText );
   }
@@ -65,4 +75,3 @@ void QgsTextFragment::applyCapitalization( Qgis::Capitalization capitalization )
 {
   mText = QgsStringUtils::capitalize( mText, capitalization );
 }
-

@@ -17,10 +17,11 @@
 #ifndef QGSLAYOUTDESIGNERDIALOG_H
 #define QGSLAYOUTDESIGNERDIALOG_H
 
+#include "qgsconfig.h"
 #include "ui_qgslayoutdesignerbase.h"
+
 #include "qgslayoutdesignerinterface.h"
-#include "qgslayoutexporter.h"
-#include "qgslayoutpagecollection.h"
+
 #include <QToolButton>
 
 class QgsLayoutDesignerDialog;
@@ -50,6 +51,9 @@ class QgsLayoutAtlas;
 class QgsFeature;
 class QgsMasterLayoutInterface;
 class QgsLayoutGuideWidget;
+class QgsScreenHelper;
+class QgsConfigureShortcutsDialog;
+class QgsShortcutsManager;
 
 class QgsAppLayoutDesignerInterface : public QgsLayoutDesignerInterface
 {
@@ -62,7 +66,7 @@ class QgsAppLayoutDesignerInterface : public QgsLayoutDesignerInterface
     QgsMasterLayoutInterface *masterLayout() override;
     QgsLayoutView *view() override;
     QgsMessageBar *messageBar() override;
-    void selectItems( const QList< QgsLayoutItem * > &items ) override;
+    void selectItems( const QList<QgsLayoutItem *> &items ) override;
     void setAtlasPreviewEnabled( bool enabled ) override;
     void setAtlasFeature( const QgsFeature &feature ) override;
     bool atlasPreviewEnabled() const override;
@@ -88,7 +92,6 @@ class QgsAppLayoutDesignerInterface : public QgsLayoutDesignerInterface
     void showRulers( bool visible ) override;
 
   private:
-
     QgsLayoutDesignerDialog *mDesigner = nullptr;
 };
 
@@ -96,12 +99,11 @@ class QgsAppLayoutDesignerInterface : public QgsLayoutDesignerInterface
  * \ingroup app
  * \brief A window for designing layouts.
  */
-class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerBase
+class QgsLayoutDesignerDialog : public QMainWindow, public Ui::QgsLayoutDesignerBase
 {
     Q_OBJECT
 
   public:
-
     QgsLayoutDesignerDialog( QWidget *parent = nullptr, Qt::WindowFlags flags = Qt::WindowFlags() );
     ~QgsLayoutDesignerDialog() override;
 
@@ -208,7 +210,13 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
      *
      * May be NULLPTR if no export has been performed in the designer.
      */
-    std::unique_ptr< QgsLayoutDesignerInterface::ExportResults > lastExportResults() const;
+    std::unique_ptr<QgsLayoutDesignerInterface::ExportResults> lastExportResults() const;
+
+    /**
+     * Returns the keyboard shortcuts manager
+     *
+     */
+    QgsShortcutsManager *shortcutsManager();
 
   public slots:
 
@@ -350,17 +358,17 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
     void mapPreviewRefreshed( QgsLayoutItemMap *map );
 
   protected:
-
     void closeEvent( QCloseEvent * ) override;
     void dropEvent( QDropEvent *event ) override;
     void dragEnterEvent( QDragEnterEvent *event ) override;
-    void showEvent( QShowEvent *event ) override;
 
   private slots:
 
     void setTitle( const QString &title );
 
     void itemTypeAdded( int id );
+    void itemTypeRemoved( int id );
+    void itemGroupRemoved( const QString &groupId );
     void statusZoomCombo_currentIndexChanged( int index );
     void statusZoomCombo_zoomEntered();
     void sliderZoomChanged( int value );
@@ -374,9 +382,10 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
     void toggleFullScreen( bool enabled );
 
     void addPages();
+    void showPageProperties();
     void statusMessageReceived( const QString &message );
     void dockVisibilityChanged( bool visible );
-    void undoRedoOccurredForItems( const QSet< QString > &itemUuids );
+    void undoRedoOccurredForItems( const QSet<QString> &itemUuids );
     void saveAsTemplate();
     void addItemsFromTemplate();
     void duplicate();
@@ -418,10 +427,10 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
     void backgroundTaskCountChanged( int total );
     void onMapPreviewRefreshed();
     void onItemAdded( QgsLayoutItem *item );
-    void updateDevicePixelFromScreen();
+    void onItemDestroyed( QObject *item );
+    void layoutMenuAboutToShow();
 
   private:
-
     static bool sInitializedRegistry;
 
     QgsAppLayoutDesignerInterface *mInterface = nullptr;
@@ -429,6 +438,8 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
     QgsMasterLayoutInterface *mMasterLayout = nullptr;
 
     QgsLayout *mLayout = nullptr;
+
+    QgsScreenHelper *mScreenHelper = nullptr;
 
     QgsMessageBar *mMessageBar = nullptr;
 
@@ -456,8 +467,8 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
     QgsLayoutViewToolEditNodes *mNodesTool = nullptr;
     QgsLayoutViewToolMoveItemContent *mMoveContentTool = nullptr;
 
-    QMap< QString, QToolButton * > mItemGroupToolButtons;
-    QMap< QString, QMenu * > mItemGroupSubmenus;
+    QMap<QString, QToolButton *> mItemGroupToolButtons;
+    QMap<QString, QMenu *> mItemGroupSubmenus;
 
     QgsLayoutAppMenuProvider *mMenuProvider = nullptr;
 
@@ -491,21 +502,25 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
 
     struct PanelStatus
     {
-      PanelStatus( bool visible = true, bool active = false )
-        : isVisible( visible )
-        , isActive( active )
-      {}
-      bool isVisible;
-      bool isActive;
+        PanelStatus( bool visible = true, bool active = false )
+          : isVisible( visible )
+          , isActive( active )
+        {}
+        bool isVisible;
+        bool isActive;
     };
-    QMap< QString, PanelStatus > mPanelStatus;
+    QMap<QString, PanelStatus> mPanelStatus;
 
     bool mBlockItemOptions = false;
 
     QComboBox *mAtlasPageComboBox = nullptr;
 
+#if defined( HAVE_QTPRINTER )
     //! Page & Printer Setup
-    std::unique_ptr< QPrinter > mPrinter;
+    std::unique_ptr<QPrinter> mPrinter;
+    QPrinter *printer();
+    void setPrinterPageOrientation( QgsLayoutItemPage::Orientation orientation );
+#endif
     bool mSetPageOrientation = false;
 
     QString mTitle;
@@ -515,11 +530,12 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
 
     bool mIsExportingAtlas = false;
     void storeExportResults( QgsLayoutExporter::ExportResult result, QgsLayoutExporter *exporter = nullptr );
-    std::unique_ptr< QgsLayoutDesignerInterface::ExportResults> mLastExportResults;
-    QMap< QString, QgsLabelingResults *> mLastExportLabelingResults;
+    std::unique_ptr<QgsLayoutDesignerInterface::ExportResults> mLastExportResults;
+    QMap<QString, QgsLabelingResults *> mLastExportLabelingResults;
 
-    double mScreenDpi = 96.0;
-    QMetaObject::Connection mScreenDpiChangedConnection;
+    //! Shortcuts manager and dialog
+    QgsShortcutsManager *mShortcutsManager = nullptr;
+    QgsConfigureShortcutsDialog *mShortcutsDialog = nullptr;
 
     //! Save window state
     void saveWindowState();
@@ -543,14 +559,14 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
 
     void showSvgExportWarning();
 
-    //! Displays a warning because of incompatibility between blend modes and QPrinter
+    //! Displays a warning because of incompatibility between blend modes and QPagedPaintDevice
     void showRasterizationWarning();
     void showForceVectorWarning();
 
     bool showFileSizeWarning();
-    bool getRasterExportSettings( QgsLayoutExporter::ImageExportSettings &settings, QSize &imageSize );
+    bool getRasterExportSettings( QgsLayoutExporter::ImageExportSettings &settings, QSize &imageSize, const QString &fileExtension );
     bool getSvgExportSettings( QgsLayoutExporter::SvgExportSettings &settings );
-    bool getPdfExportSettings( QgsLayoutExporter::PdfExportSettings &settings, bool allowGeoPdfExport = true, const QString &geoPdfReason = QString() );
+    bool getPdfExportSettings( QgsLayoutExporter::PdfExportSettings &settings, bool allowGeospatialPdfExport = true, const QString &geospatialPdfReason = QString() );
 
     void toggleAtlasActions( bool enabled );
 
@@ -574,8 +590,6 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
 
     void toggleActions( bool layoutAvailable );
 
-    void setPrinterPageOrientation( QgsLayoutItemPage::Orientation orientation );
-    QPrinter *printer();
     QString reportTypeString();
     void updateActionNames( QgsMasterLayoutInterface::Type type );
 
@@ -591,4 +605,3 @@ class QgsLayoutDesignerDialog: public QMainWindow, public Ui::QgsLayoutDesignerB
 };
 
 #endif // QGSLAYOUTDESIGNERDIALOG_H
-

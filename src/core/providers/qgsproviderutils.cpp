@@ -15,9 +15,13 @@
  ***************************************************************************/
 
 #include "qgsproviderutils.h"
+
 #include "qgsprovidersublayerdetails.h"
 
 #include <QFileInfo>
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 bool QgsProviderUtils::sublayerDetailsAreIncomplete( const QList<QgsProviderSublayerDetails> &details, SublayerCompletenessFlags flags )
 {
@@ -28,21 +32,25 @@ bool QgsProviderUtils::sublayerDetailsAreIncomplete( const QList<QgsProviderSubl
   {
     switch ( sublayer.type() )
     {
-      case QgsMapLayerType::VectorLayer:
+      case Qgis::LayerType::Vector:
         if ( sublayer.skippedContainerScan()
-             || ( !ignoreUnknownGeometryTypes && sublayer.wkbType() == QgsWkbTypes::Unknown )
-             || ( !ignoreUnknownFeatureCount &&
-                  ( sublayer.featureCount() == static_cast< long long >( Qgis::FeatureCountState::Uncounted )
-                    || sublayer.featureCount() == static_cast< long long >( Qgis::FeatureCountState::UnknownCount ) ) ) )
+             || ( !ignoreUnknownGeometryTypes && sublayer.wkbType() == Qgis::WkbType::Unknown )
+             || ( !ignoreUnknownFeatureCount && ( sublayer.featureCount() == static_cast< long long >( Qgis::FeatureCountState::Uncounted ) || sublayer.featureCount() == static_cast< long long >( Qgis::FeatureCountState::UnknownCount ) ) ) )
           return true;
         break;
 
-      case QgsMapLayerType::RasterLayer:
-      case QgsMapLayerType::PluginLayer:
-      case QgsMapLayerType::MeshLayer:
-      case QgsMapLayerType::VectorTileLayer:
-      case QgsMapLayerType::AnnotationLayer:
-      case QgsMapLayerType::PointCloudLayer:
+      case Qgis::LayerType::VectorTile:
+      case Qgis::LayerType::Raster:
+        if ( sublayer.skippedContainerScan() )
+          return true;
+        break;
+
+      case Qgis::LayerType::Plugin:
+      case Qgis::LayerType::Mesh:
+      case Qgis::LayerType::Annotation:
+      case Qgis::LayerType::PointCloud:
+      case Qgis::LayerType::Group:
+      case Qgis::LayerType::TiledScene:
         break;
     }
   }
@@ -57,13 +65,13 @@ QString QgsProviderUtils::suggestLayerNameFromFilePath( const QString &path )
   QString name = info.completeBaseName();
 
   // special handling for .adf files -- use directory as base name, not the unhelpful .adf file name
-  if ( info.suffix().compare( QLatin1String( "adf" ), Qt::CaseInsensitive ) == 0 )
+  if ( info.suffix().compare( "adf"_L1, Qt::CaseInsensitive ) == 0 )
   {
     const QString dirName = info.path();
     name = QFileInfo( dirName ).completeBaseName();
   }
   // special handling for ept.json files -- use directory as base name
-  else if ( info.fileName().compare( QLatin1String( "ept.json" ), Qt::CaseInsensitive ) == 0 )
+  else if ( info.fileName().compare( "ept.json"_L1, Qt::CaseInsensitive ) == 0 )
   {
     const QString dirName = info.path();
     name = QFileInfo( dirName ).completeBaseName();

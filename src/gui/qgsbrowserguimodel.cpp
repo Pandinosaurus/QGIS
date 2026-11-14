@@ -13,24 +13,39 @@
  *                                                                         *
  ***************************************************************************/
 #include "qgsbrowserguimodel.h"
-#include "qgslogger.h"
-#include "qgsdataitemguiproviderregistry.h"
-#include "qgsdataitemguiprovider.h"
-#include "qgsgui.h"
-#include "qgsmessagebar.h"
+
 #include "qgsdataitem.h"
+#include "qgsdataitemguiprovider.h"
+#include "qgsdataitemguiproviderregistry.h"
+#include "qgsfieldsitem.h"
+#include "qgsgui.h"
+#include "qgslogger.h"
+#include "qgsmessagebar.h"
+
+#include <QString>
+
+#include "moc_qgsbrowserguimodel.cpp"
+
+using namespace Qt::StringLiterals;
 
 QgsBrowserGuiModel::QgsBrowserGuiModel( QObject *parent )
   : QgsBrowserModel( parent )
-{
-}
+{}
 
 QgsDataItemGuiContext QgsBrowserGuiModel::createDataItemContext() const
 {
   QgsDataItemGuiContext context;
   context.setMessageBar( mMessageBar );
+  context.setMapCanvas( mMapCanvas );
   return context;
 }
+
+struct QgsBrowserGuiModelCachedAcceptDropValue
+{
+    bool acceptDrop;
+    int numberOfProviders;
+};
+Q_DECLARE_METATYPE( QgsBrowserGuiModelCachedAcceptDropValue )
 
 Qt::ItemFlags QgsBrowserGuiModel::flags( const QModelIndex &index ) const
 {
@@ -42,7 +57,7 @@ Qt::ItemFlags QgsBrowserGuiModel::flags( const QModelIndex &index ) const
 
   if ( !ptr )
   {
-    QgsDebugMsgLevel( QStringLiteral( "FLAGS PROBLEM!" ), 4 );
+    QgsDebugMsgLevel( u"FLAGS PROBLEM!"_s, 4 );
     return Qt::ItemFlags();
   }
 
@@ -55,15 +70,43 @@ Qt::ItemFlags QgsBrowserGuiModel::flags( const QModelIndex &index ) const
     flags |= Qt::ItemIsDropEnabled;
   else
   {
-    // new support
+    // Cache the value of acceptDrop(), as it can be slow to evaluate.
+    // e.g. for a OGR datasource, this requires to open it. And this method
+    // is called each time the browser is redrawn.
+    // We cache the number of providers too, to be able to invalidate the
+    // cached value if new providers are installed.
+    QVariant cachedProperty = ptr->property( "_qgs_accept_drop_cached" );
     const QList<QgsDataItemGuiProvider *> providers = QgsGui::dataItemGuiProviderRegistry()->providers();
-    for ( QgsDataItemGuiProvider *provider : providers )
+    bool refreshAcceptDrop = true;
+    if ( cachedProperty.isValid() )
     {
-      if ( provider->acceptDrop( ptr, createDataItemContext() ) )
+      QgsBrowserGuiModelCachedAcceptDropValue cached = cachedProperty.value<QgsBrowserGuiModelCachedAcceptDropValue>();
+      if ( cached.numberOfProviders == providers.size() )
       {
-        flags |= Qt::ItemIsDropEnabled;
-        break;
+        refreshAcceptDrop = false;
+        if ( cached.acceptDrop )
+          flags |= Qt::ItemIsDropEnabled;
       }
+    }
+
+    if ( refreshAcceptDrop )
+    {
+      // new support
+      for ( QgsDataItemGuiProvider *provider : providers )
+      {
+        if ( provider->acceptDrop( ptr, createDataItemContext() ) )
+        {
+          flags |= Qt::ItemIsDropEnabled;
+          break;
+        }
+      }
+
+      QgsBrowserGuiModelCachedAcceptDropValue cached;
+      cached.acceptDrop = ( flags & Qt::ItemIsDropEnabled ) != 0;
+      cached.numberOfProviders = providers.size();
+      QVariant var;
+      var.setValue( cached );
+      ptr->setProperty( "_qgs_accept_drop_cached", var );
     }
   }
   return flags;
@@ -74,7 +117,7 @@ bool QgsBrowserGuiModel::dropMimeData( const QMimeData *data, Qt::DropAction act
   QgsDataItem *destItem = dataItem( parent );
   if ( !destItem )
   {
-    QgsDebugMsgLevel( QStringLiteral( "DROP PROBLEM!" ), 4 );
+    QgsDebugMsgLevel( u"DROP PROBLEM!"_s, 4 );
     return false;
   }
 
@@ -109,12 +152,11 @@ bool QgsBrowserGuiModel::setData( const QModelIndex &index, const QVariant &valu
   QgsDataItem *item = dataItem( index );
   if ( !item )
   {
-    QgsDebugMsgLevel( QStringLiteral( "RENAME PROBLEM!" ), 4 );
+    QgsDebugMsgLevel( u"RENAME PROBLEM!"_s, 4 );
     return false;
   }
 
-  if ( !( item->capabilities2() & Qgis::BrowserItemCapability::Rename )
-       && !( item->capabilities2() & Qgis::BrowserItemCapability::ItemRepresentsFile ) )
+  if ( !( item->capabilities2() & Qgis::BrowserItemCapability::Rename ) && !( item->capabilities2() & Qgis::BrowserItemCapability::ItemRepresentsFile ) )
     return false;
 
   switch ( role )
@@ -142,4 +184,9 @@ bool QgsBrowserGuiModel::setData( const QModelIndex &index, const QVariant &valu
 void QgsBrowserGuiModel::setMessageBar( QgsMessageBar *bar )
 {
   mMessageBar = bar;
+}
+
+void QgsBrowserGuiModel::setMapCanvas( QgsMapCanvas *canvas )
+{
+  mMapCanvas = canvas;
 }

@@ -16,28 +16,37 @@
  ***************************************************************************/
 
 #include "qgsalgorithmdistancewithin.h"
+
 #include "qgsgeometryengine.h"
 #include "qgsvectorlayer.h"
+
+#include <QString>
+
+using namespace Qt::StringLiterals;
 
 ///@cond PRIVATE
 
 void QgsDistanceWithinAlgorithm::addDistanceParameter()
 {
-  std::unique_ptr< QgsProcessingParameterDistance > distanceParam( new QgsProcessingParameterDistance( QStringLiteral( "DISTANCE" ),
-      QObject::tr( "Where the features are within" ), 100, QStringLiteral( "INPUT" ), false, 0 ) );
+  auto distanceParam = std::make_unique<QgsProcessingParameterDistance>( u"DISTANCE"_s, QObject::tr( "Where the features are within" ), 100, u"INPUT"_s, false, 0 );
   distanceParam->setIsDynamic( true );
-  distanceParam->setDynamicPropertyDefinition( QgsPropertyDefinition( QStringLiteral( "Distance" ), QObject::tr( "Distance within" ), QgsPropertyDefinition::DoublePositive ) );
-  distanceParam->setDynamicLayerParameterName( QStringLiteral( "INPUT" ) );
+  distanceParam->setDynamicPropertyDefinition( QgsPropertyDefinition( u"Distance"_s, QObject::tr( "Distance within" ), QgsPropertyDefinition::DoublePositive ) );
+  distanceParam->setDynamicLayerParameterName( u"INPUT"_s );
 
   addParameter( distanceParam.release() );
 }
 
-void QgsDistanceWithinAlgorithm::process( const QgsProcessingContext &context, QgsFeatureSource *targetSource,
-    QgsFeatureSource *referenceSource,
-    double distance, const QgsProperty &distanceProperty,
-    const std::function < void( const QgsFeature & ) > &handleFeatureFunction,
-    bool onlyRequireTargetIds,
-    QgsProcessingFeedback *feedback, QgsExpressionContext &expressionContext )
+void QgsDistanceWithinAlgorithm::process(
+  const QgsProcessingContext &context,
+  QgsFeatureSource *targetSource,
+  QgsFeatureSource *referenceSource,
+  double distance,
+  const QgsProperty &distanceProperty,
+  const std::function<void( const QgsFeature & )> &handleFeatureFunction,
+  bool onlyRequireTargetIds,
+  QgsProcessingFeedback *feedback,
+  QgsExpressionContext &expressionContext
+)
 {
   // By default we will iterate over the reference source and match back
   // to the target source. We do this on the assumption that the most common
@@ -68,8 +77,7 @@ void QgsDistanceWithinAlgorithm::process( const QgsProcessingContext &context, Q
 
     // if reference is POINTs and target is not, we prefer iterating
     // over target, to benefit from preparation
-    if ( referenceSource->wkbType() == QgsWkbTypes::Point &&
-         targetSource->wkbType() != QgsWkbTypes::Point )
+    if ( referenceSource->wkbType() == Qgis::WkbType::Point && targetSource->wkbType() != Qgis::WkbType::Point )
     {
       iterateOverTarget = true;
       break;
@@ -82,31 +90,31 @@ void QgsDistanceWithinAlgorithm::process( const QgsProcessingContext &context, Q
       iterateOverTarget = true;
       break;
     }
-  }
-  while ( 0 );
+  } while ( 0 );
 
   if ( iterateOverTarget )
   {
-    processByIteratingOverTargetSource( context, targetSource, referenceSource,
-                                        distance, distanceProperty, handleFeatureFunction,
-                                        onlyRequireTargetIds, feedback, expressionContext );
+    processByIteratingOverTargetSource( context, targetSource, referenceSource, distance, distanceProperty, handleFeatureFunction, onlyRequireTargetIds, feedback, expressionContext );
   }
   else
   {
-    processByIteratingOverReferenceSource( context, targetSource, referenceSource,
-                                           distance, handleFeatureFunction,
-                                           onlyRequireTargetIds, feedback );
+    processByIteratingOverReferenceSource( context, targetSource, referenceSource, distance, handleFeatureFunction, onlyRequireTargetIds, feedback );
   }
 }
 
-void QgsDistanceWithinAlgorithm::processByIteratingOverTargetSource( const QgsProcessingContext &context, QgsFeatureSource *targetSource,
-    QgsFeatureSource *referenceSource,
-    const double distance, const QgsProperty &distanceProperty,
-    const std::function < void( const QgsFeature & ) > &handleFeatureFunction,
-    bool onlyRequireTargetIds,
-    QgsProcessingFeedback *feedback, QgsExpressionContext &expressionContext )
+void QgsDistanceWithinAlgorithm::processByIteratingOverTargetSource(
+  const QgsProcessingContext &context,
+  QgsFeatureSource *targetSource,
+  QgsFeatureSource *referenceSource,
+  const double distance,
+  const QgsProperty &distanceProperty,
+  const std::function<void( const QgsFeature & )> &handleFeatureFunction,
+  bool onlyRequireTargetIds,
+  QgsProcessingFeedback *feedback,
+  QgsExpressionContext &expressionContext
+)
 {
-  if ( referenceSource->hasSpatialIndex() == QgsFeatureSource::SpatialIndexNotPresent )
+  if ( referenceSource->hasSpatialIndex() == Qgis::SpatialIndexPresence::NotPresent )
     feedback->pushWarning( QObject::tr( "No spatial index exists for intersect layer, performance will be severely degraded" ) );
 
   QgsFeatureIds foundSet;
@@ -118,6 +126,7 @@ void QgsDistanceWithinAlgorithm::processByIteratingOverTargetSource( const QgsPr
 
   QgsFeatureIterator fIt = targetSource->getFeatures( request );
   const double step = targetSource->featureCount() > 0 ? 100.0 / targetSource->featureCount() : 1;
+  const QgsCoordinateReferenceSystem targetSourceCrs = targetSource->sourceCrs();
   int current = 0;
   QgsFeature f;
   while ( fIt.nextFeature( f ) )
@@ -135,7 +144,7 @@ void QgsDistanceWithinAlgorithm::processByIteratingOverTargetSource( const QgsPr
       currentDistance = distanceProperty.valueAsDouble( expressionContext, currentDistance );
     }
 
-    request = QgsFeatureRequest().setDistanceWithin( f.geometry(), currentDistance ).setNoAttributes().setDestinationCrs( targetSource->sourceCrs(), context.transformContext() );
+    request = QgsFeatureRequest().setDistanceWithin( f.geometry(), currentDistance ).setNoAttributes().setDestinationCrs( targetSourceCrs, context.transformContext() );
     // we only care IF there's ANY features within the target distance here, so fetch at most 1 feature
     request.setLimit( 1 );
 
@@ -152,14 +161,17 @@ void QgsDistanceWithinAlgorithm::processByIteratingOverTargetSource( const QgsPr
   }
 }
 
-void QgsDistanceWithinAlgorithm::processByIteratingOverReferenceSource( const QgsProcessingContext &context, QgsFeatureSource *targetSource,
-    QgsFeatureSource *referenceSource,
-    const double distance,
-    const std::function < void( const QgsFeature & ) > &handleFeatureFunction,
-    bool onlyRequireTargetIds,
-    QgsProcessingFeedback *feedback )
+void QgsDistanceWithinAlgorithm::processByIteratingOverReferenceSource(
+  const QgsProcessingContext &context,
+  QgsFeatureSource *targetSource,
+  QgsFeatureSource *referenceSource,
+  const double distance,
+  const std::function<void( const QgsFeature & )> &handleFeatureFunction,
+  bool onlyRequireTargetIds,
+  QgsProcessingFeedback *feedback
+)
 {
-  if ( targetSource->hasSpatialIndex() == QgsFeatureSource::SpatialIndexNotPresent )
+  if ( targetSource->hasSpatialIndex() == Qgis::SpatialIndexPresence::NotPresent )
     feedback->pushWarning( QObject::tr( "No spatial index exists for input layer, performance will be severely degraded" ) );
 
   QgsFeatureIds foundSet;
@@ -210,32 +222,30 @@ void QgsDistanceWithinAlgorithm::processByIteratingOverReferenceSource( const Qg
 
 void QgsSelectWithinDistanceAlgorithm::initAlgorithm( const QVariantMap & )
 {
-  const QStringList methods = QStringList() << QObject::tr( "creating new selection" )
+  const QStringList methods = QStringList()
+                              << QObject::tr( "creating new selection" )
                               << QObject::tr( "adding to current selection" )
                               << QObject::tr( "selecting within current selection" )
                               << QObject::tr( "removing from current selection" );
 
-  addParameter( new QgsProcessingParameterVectorLayer( QStringLiteral( "INPUT" ), QObject::tr( "Select features from" ),
-                QList< int >() << QgsProcessing::TypeVectorAnyGeometry ) );
+  addParameter( new QgsProcessingParameterVectorLayer( u"INPUT"_s, QObject::tr( "Select features from" ), QList<int>() << static_cast<int>( Qgis::ProcessingSourceType::VectorAnyGeometry ) ) );
 
-  addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "REFERENCE" ),
-                QObject::tr( "By comparing to the features from" ),
-                QList< int >() << QgsProcessing::TypeVectorAnyGeometry ) );
+  addParameter(
+    new QgsProcessingParameterFeatureSource( u"REFERENCE"_s, QObject::tr( "By comparing to the features from" ), QList<int>() << static_cast<int>( Qgis::ProcessingSourceType::VectorAnyGeometry ) )
+  );
   addDistanceParameter();
 
-  addParameter( new QgsProcessingParameterEnum( QStringLiteral( "METHOD" ),
-                QObject::tr( "Modify current selection by" ),
-                methods, false, 0 ) );
+  addParameter( new QgsProcessingParameterEnum( u"METHOD"_s, QObject::tr( "Modify current selection by" ), methods, false, 0 ) );
 }
 
 QString QgsSelectWithinDistanceAlgorithm::name() const
 {
-  return QStringLiteral( "selectwithindistance" );
+  return u"selectwithindistance"_s;
 }
 
-QgsProcessingAlgorithm::Flags QgsSelectWithinDistanceAlgorithm::flags() const
+Qgis::ProcessingAlgorithmFlags QgsSelectWithinDistanceAlgorithm::flags() const
 {
-  return QgsProcessingAlgorithm::flags() | QgsProcessingAlgorithm::FlagNoThreading | QgsProcessingAlgorithm::FlagNotAvailableInStandaloneTool;
+  return QgsProcessingAlgorithm::flags() | Qgis::ProcessingAlgorithmFlag::NoThreading | Qgis::ProcessingAlgorithmFlag::NotAvailableInStandaloneTool;
 }
 
 QString QgsSelectWithinDistanceAlgorithm::displayName() const
@@ -245,7 +255,7 @@ QString QgsSelectWithinDistanceAlgorithm::displayName() const
 
 QStringList QgsSelectWithinDistanceAlgorithm::tags() const
 {
-  return QObject::tr( "select,maximum,buffer" ).split( ',' );
+  return QObject::tr( "select,by,maximum,buffer" ).split( ',' );
 }
 
 QString QgsSelectWithinDistanceAlgorithm::group() const
@@ -255,13 +265,20 @@ QString QgsSelectWithinDistanceAlgorithm::group() const
 
 QString QgsSelectWithinDistanceAlgorithm::groupId() const
 {
-  return QStringLiteral( "vectorselection" );
+  return u"vectorselection"_s;
 }
 
 QString QgsSelectWithinDistanceAlgorithm::shortHelpString() const
 {
-  return QObject::tr( "This algorithm creates a selection in a vector layer. Features are selected wherever they are within "
-                      "the specified maximum distance from the features in an additional reference layer." );
+  return QObject::tr(
+    "This algorithm creates a selection in a vector layer. Features are selected wherever they are within "
+    "the specified maximum distance from the features in an additional reference layer."
+  );
+}
+
+QString QgsSelectWithinDistanceAlgorithm::shortDescription() const
+{
+  return QObject::tr( "Selects features that are within a specified distance from features in another layer." );
 }
 
 QgsSelectWithinDistanceAlgorithm *QgsSelectWithinDistanceAlgorithm::createInstance() const
@@ -271,33 +288,32 @@ QgsSelectWithinDistanceAlgorithm *QgsSelectWithinDistanceAlgorithm::createInstan
 
 QVariantMap QgsSelectWithinDistanceAlgorithm::processAlgorithm( const QVariantMap &parameters, QgsProcessingContext &context, QgsProcessingFeedback *feedback )
 {
-  QgsVectorLayer *selectLayer = parameterAsVectorLayer( parameters, QStringLiteral( "INPUT" ), context );
+  QGS_MARK_ALGORITHM_SOURCE
+
+  QgsVectorLayer *selectLayer = parameterAsVectorLayer( parameters, u"INPUT"_s, context );
   if ( !selectLayer )
     throw QgsProcessingException( QObject::tr( "Could not load source layer for INPUT" ) );
 
-  const Qgis::SelectBehavior method = static_cast< Qgis::SelectBehavior >( parameterAsEnum( parameters, QStringLiteral( "METHOD" ), context ) );
-  const std::unique_ptr< QgsFeatureSource > referenceSource( parameterAsSource( parameters, QStringLiteral( "REFERENCE" ), context ) );
+  const Qgis::SelectBehavior method = static_cast<Qgis::SelectBehavior>( parameterAsEnum( parameters, u"METHOD"_s, context ) );
+  const std::unique_ptr<QgsFeatureSource> referenceSource( parameterAsSource( parameters, u"REFERENCE"_s, context ) );
   if ( !referenceSource )
-    throw QgsProcessingException( invalidSourceError( parameters, QStringLiteral( "REFERENCE" ) ) );
+    throw QgsProcessingException( invalidSourceError( parameters, u"REFERENCE"_s ) );
 
-  const double distance = parameterAsDouble( parameters, QStringLiteral( "DISTANCE" ), context );
-  const bool dynamicDistance = QgsProcessingParameters::isDynamic( parameters, QStringLiteral( "DISTANCE" ) );
+  const double distance = parameterAsDouble( parameters, u"DISTANCE"_s, context );
+  const bool dynamicDistance = QgsProcessingParameters::isDynamic( parameters, u"DISTANCE"_s );
   QgsProperty distanceProperty;
   if ( dynamicDistance )
-    distanceProperty = parameters.value( QStringLiteral( "DISTANCE" ) ).value< QgsProperty >();
+    distanceProperty = parameters.value( u"DISTANCE"_s ).value<QgsProperty>();
   QgsExpressionContext expressionContext = createExpressionContext( parameters, context );
   expressionContext.appendScope( selectLayer->createExpressionContextScope() );
 
   QgsFeatureIds selectedIds;
-  auto addToSelection = [&]( const QgsFeature & feature )
-  {
-    selectedIds.insert( feature.id() );
-  };
+  auto addToSelection = [&]( const QgsFeature &feature ) { selectedIds.insert( feature.id() ); };
   process( context, selectLayer, referenceSource.get(), distance, distanceProperty, addToSelection, true, feedback, expressionContext );
 
   selectLayer->selectByIds( selectedIds, method );
   QVariantMap results;
-  results.insert( QStringLiteral( "OUTPUT" ), parameters.value( QStringLiteral( "INPUT" ) ) );
+  results.insert( u"OUTPUT"_s, parameters.value( u"INPUT"_s ) );
   return results;
 }
 
@@ -308,20 +324,18 @@ QVariantMap QgsSelectWithinDistanceAlgorithm::processAlgorithm( const QVariantMa
 
 void QgsExtractWithinDistanceAlgorithm::initAlgorithm( const QVariantMap & )
 {
-  addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "INPUT" ),
-                QObject::tr( "Extract features from" ),
-                QList< int >() << QgsProcessing::TypeVectorAnyGeometry ) );
-  addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "REFERENCE" ),
-                QObject::tr( "By comparing to the features from" ),
-                QList< int >() << QgsProcessing::TypeVectorAnyGeometry ) );
+  addParameter( new QgsProcessingParameterFeatureSource( u"INPUT"_s, QObject::tr( "Extract features from" ), QList<int>() << static_cast<int>( Qgis::ProcessingSourceType::VectorAnyGeometry ) ) );
+  addParameter(
+    new QgsProcessingParameterFeatureSource( u"REFERENCE"_s, QObject::tr( "By comparing to the features from" ), QList<int>() << static_cast<int>( Qgis::ProcessingSourceType::VectorAnyGeometry ) )
+  );
   addDistanceParameter();
 
-  addParameter( new QgsProcessingParameterFeatureSink( QStringLiteral( "OUTPUT" ), QObject::tr( "Extracted (location)" ) ) );
+  addParameter( new QgsProcessingParameterFeatureSink( u"OUTPUT"_s, QObject::tr( "Extracted (location)" ) ) );
 }
 
 QString QgsExtractWithinDistanceAlgorithm::name() const
 {
-  return QStringLiteral( "extractwithindistance" );
+  return u"extractwithindistance"_s;
 }
 
 QString QgsExtractWithinDistanceAlgorithm::displayName() const
@@ -331,7 +345,7 @@ QString QgsExtractWithinDistanceAlgorithm::displayName() const
 
 QStringList QgsExtractWithinDistanceAlgorithm::tags() const
 {
-  return QObject::tr( "extract,filter,select,maximum,buffer" ).split( ',' );
+  return QObject::tr( "extract,by,filter,select,maximum,buffer" ).split( ',' );
 }
 
 QString QgsExtractWithinDistanceAlgorithm::group() const
@@ -341,14 +355,24 @@ QString QgsExtractWithinDistanceAlgorithm::group() const
 
 QString QgsExtractWithinDistanceAlgorithm::groupId() const
 {
-  return QStringLiteral( "vectorselection" );
+  return u"vectorselection"_s;
 }
 
 QString QgsExtractWithinDistanceAlgorithm::shortHelpString() const
 {
-  return QObject::tr( "This algorithm creates a new vector layer that only contains matching features from an "
-                      "input layer. Features are copied wherever they are within "
-                      "the specified maximum distance from the features in an additional reference layer." );
+  return QObject::tr(
+    "This algorithm creates a new vector layer that only contains matching features from an "
+    "input layer. Features are copied wherever they are within "
+    "the specified maximum distance from the features in an additional reference layer."
+  );
+}
+
+QString QgsExtractWithinDistanceAlgorithm::shortDescription() const
+{
+  return QObject::tr(
+    "Creates a new vector layer with features that are within "
+    "a specified distance from features in another layer."
+  );
 }
 
 QgsExtractWithinDistanceAlgorithm *QgsExtractWithinDistanceAlgorithm::createInstance() const
@@ -358,39 +382,43 @@ QgsExtractWithinDistanceAlgorithm *QgsExtractWithinDistanceAlgorithm::createInst
 
 QVariantMap QgsExtractWithinDistanceAlgorithm::processAlgorithm( const QVariantMap &parameters, QgsProcessingContext &context, QgsProcessingFeedback *feedback )
 {
-  std::unique_ptr< QgsProcessingFeatureSource > input( parameterAsSource( parameters, QStringLiteral( "INPUT" ), context ) );
-  if ( !input )
-    throw QgsProcessingException( invalidSourceError( parameters, QStringLiteral( "INPUT" ) ) );
-  const std::unique_ptr< QgsFeatureSource > referenceSource( parameterAsSource( parameters, QStringLiteral( "REFERENCE" ), context ) );
-  if ( !referenceSource )
-    throw QgsProcessingException( invalidSourceError( parameters, QStringLiteral( "REFERENCE" ) ) );
+  QGS_MARK_ALGORITHM_SOURCE
 
-  const double distance = parameterAsDouble( parameters, QStringLiteral( "DISTANCE" ), context );
-  const bool dynamicDistance = QgsProcessingParameters::isDynamic( parameters, QStringLiteral( "DISTANCE" ) );
+  std::unique_ptr<QgsProcessingFeatureSource> input( parameterAsSource( parameters, u"INPUT"_s, context ) );
+  if ( !input )
+    throw QgsProcessingException( invalidSourceError( parameters, u"INPUT"_s ) );
+  const std::unique_ptr<QgsFeatureSource> referenceSource( parameterAsSource( parameters, u"REFERENCE"_s, context ) );
+  if ( !referenceSource )
+    throw QgsProcessingException( invalidSourceError( parameters, u"REFERENCE"_s ) );
+
+  const double distance = parameterAsDouble( parameters, u"DISTANCE"_s, context );
+  const bool dynamicDistance = QgsProcessingParameters::isDynamic( parameters, u"DISTANCE"_s );
   QgsProperty distanceProperty;
   if ( dynamicDistance )
-    distanceProperty = parameters.value( QStringLiteral( "DISTANCE" ) ).value< QgsProperty >();
+    distanceProperty = parameters.value( u"DISTANCE"_s ).value<QgsProperty>();
   QgsExpressionContext expressionContext = createExpressionContext( parameters, context, input.get() );
 
   QString dest;
-  std::unique_ptr< QgsFeatureSink > sink( parameterAsSink( parameters, QStringLiteral( "OUTPUT" ), context, dest, input->fields(), input->wkbType(), input->sourceCrs() ) );
+  std::unique_ptr<QgsFeatureSink> sink( parameterAsSink( parameters, u"OUTPUT"_s, context, dest, input->fields(), input->wkbType(), input->sourceCrs() ) );
 
   if ( !sink )
-    throw QgsProcessingException( invalidSinkError( parameters, QStringLiteral( "OUTPUT" ) ) );
+    throw QgsProcessingException( invalidSinkError( parameters, u"OUTPUT"_s ) );
 
-  auto addToSink = [&]( const QgsFeature & feature )
-  {
+  auto addToSink = [&]( const QgsFeature &feature ) {
     QgsFeature f = feature;
     if ( !sink->addFeature( f, QgsFeatureSink::FastInsert ) )
-      throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
+      throw QgsProcessingException( writeFeatureError( sink.get(), parameters, u"OUTPUT"_s ) );
+    else
+      feedback->featureAddedToSink( u"OUTPUT"_s );
   };
   process( context, input.get(), referenceSource.get(), distance, distanceProperty, addToSink, false, feedback, expressionContext );
 
+  sink->finalize();
+  feedback->featureSinkFinalized( u"OUTPUT"_s );
+
   QVariantMap results;
-  results.insert( QStringLiteral( "OUTPUT" ), dest );
+  results.insert( u"OUTPUT"_s, dest );
   return results;
 }
 
 ///@endcond
-
-

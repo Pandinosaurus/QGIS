@@ -37,7 +37,8 @@ my @lang;
 # translator names here as a hash where the key is the lang_country code used for the ts file name
 my $translators= {
 	'af' => '',
-	'ar' => 'Ichaouia Amine, Hosham Munier, Ammar Shaarbaf',
+	'ar' => 'Ichaouia Amine, Hosham Munier, Ammar Shaarbaf, Razan Elnour',
+	'az' => '',
 	'bg' => 'Захари Савов, Jordan Tzvetkov',
 	'bs' => 'Almir Karabegovic',
 	'ca' => 'Albert F, Pau Reguant Ridó, Xavier Roijals',
@@ -54,7 +55,7 @@ my $translators= {
 	'fr' => 'Arnaud Morvan, Augustin Roche, Didier Vanden Berghe, Dofabien, Etienne Trimaille, Harrissou Sant-anna, Jean-Roc Morreale, Jérémy Garniaux, Loïc Buscoz, Lsam, Marc-André Saia, Marie Silvestre, Mathieu Bossaert, Mathieu Lattes, Mayeul Kauffmann, Médéric Ribreux, Mehdi Semchaoui, Michael Douchin, Nicolas Boisteault, Nicolas Rochard, Pascal Obstetar, Robin Prest, Rod Bera, Stéphane Henriod, Stéphane Possamai, sylther, Sylvain Badey, Sylvain Maillard, Vincent Picavet, Xavier Tardieu, Yann Leveille-Menez, yoda89, Vincent Bré',
 	'gl' => 'Xan Vieiro',
 	'hi' => 'Harish Kumar Solanki',
-	'hu' => 'Zoltan Siki, Zoltan Toldi',
+	'hu' => 'Zoltan Siki, Zoltan Toldi, Peter Bathory',
 	'hr' => 'Zoran Jankovic',
 	'is' => 'Ásta Kristín Óladóttir, Thordur Ivarsson, Sveinn í Felli',
 	'id' => 'Emir Hartato, Muhammad Iqnaul Haq Siregar, Trias Aditya, Januar V. Simarmata, I Made Anombawa',  #spellok
@@ -70,13 +71,13 @@ my $translators= {
 	'ml' => 'Vinayan Parameswaran',
 	'mn' => 'Bayarmaa Enkhtur',
 	'mr' => '',
-	'nb' => 'James Stott, Maléne Peterson, Kjell Cato Heskjestad',
+	'nb' => 'James Stott, Maléne Peterson, Kaci Noranes Heskjestad',
 	'nl' => 'Richard Duivenvoorde, Raymond Nijssen, Carlo van Rijswijk, Diethard Jansen, Willem Hoffmans, Dick Groskamp',
-	'pl' => 'Robert Szczepanek, Milena Nowotarska, Borys Jurgiel, Mateusz Łoskot, Tomasz Paul, Andrzej Świąder, Radosław Pasiok, Michał Kułach, Ewelina Krawczak, Michał Smoczyk, Jakub Bobrowski, Kuba Kiszkurno, Beata Baziak, Bartosz Mazurkiewcz, Tomasz Rychlicki',
+	'pl' => 'Robert Szczepanek, Milena Nowotarska, Borys Jurgiel, Mateusz Łoskot, Tomasz Paul, Andrzej Świąder, Radosław Pasiok, Michał Kułach, Ewelina Krawczak, Michał Smoczyk, Jakub Bobrowski, Kuba Kiszkurno, Beata Baziak, Bartosz Mazurkiewcz, Tomasz Rychlicki, Jakub Kaczorowski',
 	'pt_BR' => 'Sidney Schaberle Goveia, Arthur Nanni, Marcelo Soares Souza, Narcélio de Sá Pereira Filho, Leônidas Descovi Filho, Felipe Sodré Barros ',
 	'pt_PT' => 'Giovanni Manghi, Joana Simões, Duarte Carreira, Alexandre Neto, Pedro Pereira, Pedro Palheiro, Nelson Silva, Ricardo Sena, Leandro Infantini, João Gaspar, José Macau',
 	'ro' => 'Sorin Călinică, Tudor Bărăscu, Georgiana Ioanovici, Alex Bădescu, Lonut Losifescu-Enescu, Bogdan Pacurar',
-	'ru' => 'Alexander Bruy, Artem Popov',
+	'ru' => 'Eduard Kazakov, Maxim Dubinin',
 	'sc' => 'Valerio Pinna',
 	'sk' => 'Lubos Balazovic, Jana Kormanikova, Ivan Mincik',
 	'sl' => 'Jože Detečnik, Dejan Gregor, Jaka Kranjc',
@@ -93,7 +94,7 @@ my $translators= {
 	'uk' => 'Alexander Bruy, Daria Svidzinska, Svitlana Shulik, Alesya Shushova',
 	'vi' => 'Phùng Văn Doanh, Bùi Hữu Mạnh, Nguyễn Văn Thanh, Nguyễn Hữu Phúc, Cao Minh Tu',
 	'zh-Hant' => 'Calvin Ngei, Zhang Jun, Richard Xie, Dennis Raylin Chen',
-	'zh-Hans' => 'Calvin Ngei, Lisashen, Wang Shuai, Xu Baocai',
+	'zh-Hans' => 'Calvin Ngei, Lisashen, Wang Shuai, 徐保才, chenzero',
 };
 
 my $maxn;
@@ -126,7 +127,7 @@ for my $i (<i18n/qgis_*.ts>) {
 	my $name = $locale->get_language_from_code($langcode);
 	$name .= $charset;
 
-	open F, "lrelease $i|";
+	open F, "LC_MESSAGES=C lrelease $i|";
 
 	my($translations,$finished,$unfinished);
 	my $untranslated=0;
@@ -181,6 +182,8 @@ print "<table>";
 print "<tr><th colspan=\"2\" style=\"width:250px;\">Language</th><th>Finished %</th><th>Translators</th></tr>\n";
 for my $l (sort { $b->{percentage} <=> $a->{percentage} } @lang) {
 	last if $l->{percentage} < 35;
+	print STDERR "WARNING: images/flags/" . $l->{svg} . ".svg MISSING.\n" unless -f "images/flags/" . $l->{svg} . ".svg";
+	print STDERR "WARNING: flags/" . $l->{svg} . ".svg MISSING IN RESOURCES.\n" if system("grep -Fq '<file>flags/" . $l->{svg} . ".svg</file>' images/images.qrc") != 0;
 	printf "\n<tr>"
 		. '<td align="center"><img src="qrc:/images/flags/%s.svg" height="20"></td><td>%s</td>'
 		. '<td><div title="finished:%d unfinished:%d untranslated:%d" class="bartodo"><div class="bardone" style="width:%dpx">%.1f</div></div></td>'
@@ -204,8 +207,17 @@ rename "i18n/CMakeLists.txt", "i18n/CMakeLists.txt.temp" || die "cannot rename i
 open I, "i18n/CMakeLists.txt.temp";
 open O, ">i18n/CMakeLists.txt";
 while(<I>) {
-	if( /^SET\(TS_FILES /i ) {
-		print O "set(TS_FILES " . join( " ", map { "qgis_$_\.ts"; } @ts ) . ")\n";
+	if( /^SET\(TS_FILES (.*)\)/i ) {
+		my @oldts = split /\s+/, $1;
+		my @newts = map { "qgis_$_\.ts"; } @ts;
+		for my $ts (@oldts) {
+			die "FATAL: $ts was dropped\n" if exists $ENV{CONSIDER_TS_DROP_FATAL} && ! grep /^$ts$/, @newts;
+			print STDERR "WARNING: $ts dropped\n" unless grep /^$ts$/, @newts;
+		}
+		for my $ts (@newts) {
+			print STDERR "INFO: $ts added\n" unless grep /^$ts$/, @oldts;
+		}
+		print O "set(TS_FILES " . join( " ", @newts ) . ")\n";
 	} else {
 		print O;
 	}

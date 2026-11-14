@@ -16,17 +16,17 @@
 #ifndef QGSTEXTBACKGROUNDSETTINGS_H
 #define QGSTEXTBACKGROUNDSETTINGS_H
 
-#include "qgis_sip.h"
+#include "qgis.h"
 #include "qgis_core.h"
-#include "qgsunittypes.h"
+#include "qgis_sip.h"
 #include "qgsmapunitscale.h"
 
-#include <QString>
-#include <QPointF>
-#include <QSizeF>
-#include <QPainter>
 #include <QDomElement>
+#include <QPainter>
+#include <QPointF>
 #include <QSharedDataPointer>
+#include <QSizeF>
+#include <QString>
 
 class QgsMarkerSymbol;
 class QgsFillSymbol;
@@ -41,23 +41,21 @@ class QgsTextBackgroundSettingsPrivate;
   * \ingroup core
   * \brief Container for settings relating to a text background object.
   * \note QgsTextBackgroundSettings objects are implicitly shared.
-  * \since QGIS 3.0
  */
 class CORE_EXPORT QgsTextBackgroundSettings
 {
   public:
-
     /**
      * Background shape types.
      */
     enum ShapeType
     {
       ShapeRectangle = 0, //!< Rectangle
-      ShapeSquare, //!< Square - buffered sizes only
-      ShapeEllipse, //!< Ellipse
-      ShapeCircle, //!< Circle
-      ShapeSVG, //!< SVG file
-      ShapeMarkerSymbol, //!< Marker symbol
+      ShapeSquare,        //!< Square - buffered sizes only
+      ShapeEllipse,       //!< Ellipse
+      ShapeCircle,        //!< Circle
+      ShapeSVG,           //!< SVG file
+      ShapeMarkerSymbol,  //!< Marker symbol
     };
 
     /**
@@ -66,8 +64,8 @@ class CORE_EXPORT QgsTextBackgroundSettings
     enum SizeType
     {
       SizeBuffer = 0, //!< Shape size is determined by adding a buffer margin around text
-      SizeFixed, //!< Fixed size
-      SizePercent //!< Shape size is determined by percent of text size
+      SizeFixed,      //!< Fixed size
+      SizePercent     //!< Shape size is determined by percent of text size
     };
 
     /**
@@ -76,19 +74,17 @@ class CORE_EXPORT QgsTextBackgroundSettings
     enum RotationType
     {
       RotationSync = 0, //!< Shape rotation is synced with text rotation
-      RotationOffset, //!< Shape rotation is offset from text rotation
-      RotationFixed //!< Shape rotation is a fixed angle
+      RotationOffset,   //!< Shape rotation is offset from text rotation
+      RotationFixed     //!< Shape rotation is a fixed angle
     };
 
     QgsTextBackgroundSettings();
 
-    /**
-     * Copy constructor.
-     * \param other source QgsTextBackgroundSettings
-     */
     QgsTextBackgroundSettings( const QgsTextBackgroundSettings &other );
+    SIP_SKIP QgsTextBackgroundSettings( QgsTextBackgroundSettings &&other );
 
     QgsTextBackgroundSettings &operator=( const QgsTextBackgroundSettings &other );
+    QgsTextBackgroundSettings &operator=( QgsTextBackgroundSettings &&other );
 
     ~QgsTextBackgroundSettings();
 
@@ -220,7 +216,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see sizeType()
      * \see size()
      */
-    QgsUnitTypes::RenderUnit sizeUnit() const;
+    Qgis::RenderUnit sizeUnit() const;
 
     /**
      * Sets the units used for the shape's size. This value has no meaning if the sizeType() is set to
@@ -230,7 +226,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see setSizeType()
      * \see setSize()
      */
-    void setSizeUnit( QgsUnitTypes::RenderUnit unit );
+    void setSizeUnit( Qgis::RenderUnit unit );
 
     /**
      * Returns the map unit scale object for the shape size. This is only used if the
@@ -300,7 +296,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see setOffsetUnit()
      * \see offset()
      */
-    QgsUnitTypes::RenderUnit offsetUnit() const;
+    Qgis::RenderUnit offsetUnit() const;
 
     /**
      * Sets the units used for the shape's offset.
@@ -308,7 +304,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see offsetUnit()
      * \see setOffset()
      */
-    void setOffsetUnit( QgsUnitTypes::RenderUnit units );
+    void setOffsetUnit( Qgis::RenderUnit units );
 
     /**
      * Returns the map unit scale object for the shape offset. This is only used if the
@@ -350,7 +346,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see setRadiiUnit()
      * \see radii()
      */
-    QgsUnitTypes::RenderUnit radiiUnit() const;
+    Qgis::RenderUnit radiiUnit() const;
 
     /**
      * Sets the units used for the shape's radii.
@@ -358,7 +354,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see radiiUnit()
      * \see setRadii()
      */
-    void setRadiiUnit( QgsUnitTypes::RenderUnit units );
+    void setRadiiUnit( Qgis::RenderUnit units );
 
     /**
      * Returns the map unit scale object for the shape radii. This is only used if the
@@ -464,7 +460,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \see setStrokeWidthUnit()
      * \see strokeWidth()
      */
-    QgsUnitTypes::RenderUnit strokeWidthUnit() const;
+    Qgis::RenderUnit strokeWidthUnit() const;
 
     /**
      * Sets the units used for the shape's stroke width.
@@ -474,7 +470,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
      * \note As of QGIS 3.20, using this function is only recommended for SVG backgrounds, while
      * other background types should be configured through their symbols.
      */
-    void setStrokeWidthUnit( QgsUnitTypes::RenderUnit units );
+    void setStrokeWidthUnit( Qgis::RenderUnit units );
 
     /**
      * Returns the map unit scale object for the shape stroke width. This is only used if the
@@ -564,9 +560,7 @@ class CORE_EXPORT QgsTextBackgroundSettings
     QSet<QString> referencedFields( const QgsRenderContext &context ) const;
 
   private:
-
     QSharedDataPointer<QgsTextBackgroundSettingsPrivate> d;
-
 };
 
 #endif // QGSTEXTBACKGROUNDSETTINGS_H
